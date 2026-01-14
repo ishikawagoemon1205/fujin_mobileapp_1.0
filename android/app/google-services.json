@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "569091665840",
+    "project_id": "fujin-634db",
+    "storage_bucket": "fujin-634db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:569091665840:android:e7e0d3c6b224820eacb075",
+        "android_client_info": {
+          "package_name": "com.example.wcm_fujin_mobile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKFM5iTkalrjqoGZ_k1c4031KUM5NnvfY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
