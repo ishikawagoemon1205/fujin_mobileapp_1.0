@@ -2,11 +2,11 @@
 ====================================================
 目的:
   - 箱を封印する機能の画面
-  - QRスキャン → 内容物登録 → 保存
+  - 内容物登録 + QRスキャン → 保存
 
 処理構造:
-  - QRコードの連続スキャン
-  - 写真・メモ・保管場所の入力
+  - 写真・メモ・保管場所の入力（箱が開いている状態）
+  - QRコードの連続スキャン（埋め込み型スキャナー）
   - Firestoreへの保存
   - エラーハンドリング
 ====================================================
@@ -22,7 +22,7 @@ import '../../../core/utils/qr_utils.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
-import '../../../shared/widgets/qr_scan_page.dart';
+import 'seal_qr_scan_page.dart';
 
 /// 封印画面
 class SealPage extends ConsumerStatefulWidget {
@@ -38,7 +38,6 @@ class _SealPageState extends ConsumerState<SealPage> {
   final List<File> selectedPhotos = [];
   final TextEditingController memoController = TextEditingController();
   final TextEditingController storageLocationController = TextEditingController();
-  bool isScanning = true;
   bool isSaving = false;
 
   @override
@@ -67,23 +66,19 @@ class _SealPageState extends ConsumerState<SealPage> {
       boxId = scannedBoxId;
     } else if (boxId != scannedBoxId) {
       debugPrint('[Flutter SealPage] Different box ID detected (expected: $boxId, got: $scannedBoxId)');
-      // エラー時は画面を保持したままダイアログ表示
       showErrorDialog('異なる箱のQRコードです');
       return;
     }
 
     if (scannedQRCodes.containsKey(faceId)) {
-      debugPrint('[Flutter SealPage] Duplicate face ID: $faceId');
-      // エラー時は画面を保持したままダイアログ表示
-      showErrorDialog('このQRコード($faceId)は既にスキャン済みです');
+      debugPrint('[Flutter SealPage] Duplicate face ID: $faceId, ignoring silently');
       return;
     }
 
-    // QRコードを追加（isScanningは変更しない！）
-    debugPrint('[Flutter SealPage] Adding QR to scannedQRCodes (isScanning stays false)');
+    // QRコードを追加
+    debugPrint('[Flutter SealPage] Adding QR to scannedQRCodes');
     setState(() {
       scannedQRCodes[faceId] = qrCode;
-      // isScanning は false のまま（フォーム画面を表示）
     });
     debugPrint('[Flutter SealPage] setState completed, scannedQRCodes.length=${scannedQRCodes.length}');
 
@@ -150,7 +145,11 @@ class _SealPageState extends ConsumerState<SealPage> {
       return;
     }
 
-    // 保管場所は任意項目（バリデーションなし）
+    final storageLocation = storageLocationController.text.trim();
+    if (storageLocation.isEmpty) {
+      showErrorDialog('保管場所を入力してください');
+      return;
+    }
 
     debugPrint('[Flutter SealPage] Starting save process...');
     setState(() {
@@ -293,50 +292,11 @@ class _SealPageState extends ConsumerState<SealPage> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('[Flutter SealPage] build() called, isScanning=$isScanning, scannedQRCodes=${scannedQRCodes.length}');
-    
-    if (isScanning) {
-      debugPrint('[Flutter SealPage] Rendering QRScanPage');
-      return QRScanPage(
-        title: '封印用QRをスキャン',
-        instruction: scannedQRCodes.isEmpty
-            ? '箱に貼った最初のQRコードをスキャンしてください'
-            : '${scannedQRCodes.length}枚スキャン済み\n続けてスキャンするか、下のボタンをタップ',
-        onQRCodeDetected: (qrCode) {
-          debugPrint('[Flutter SealPage] onQRCodeDetected callback triggered');
-          if (!mounted) {
-            debugPrint('[Flutter SealPage] Widget unmounted, aborting');
-            return;
-          }
-          
-          // スキャン画面からフォーム画面に切り替え
-          debugPrint('[Flutter SealPage] Setting isScanning=false to show form');
-          setState(() {
-            isScanning = false;
-          });
-          
-          // QRコード処理を実行
-          debugPrint('[Flutter SealPage] Calling handleQRCodeScanned');
-          handleQRCodeScanned(qrCode);
-        },
-      );
-    }
-    
-    debugPrint('[Flutter SealPage] Rendering Scaffold (main UI)');
+    debugPrint('[Flutter SealPage] build() called, scannedQRCodes=${scannedQRCodes.length}');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('新しく封印する'),
-        actions: [
-          if (scannedQRCodes.isNotEmpty && !isSaving)
-            TextButton(
-              onPressed: saveBox,
-              child: const Text(
-                '封印する',
-                style: TextStyle(fontSize: 16),
-              ),
-            ),
-        ],
       ),
       body: isSaving
           ? const Center(
@@ -363,19 +323,19 @@ class _SealPageState extends ConsumerState<SealPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildQRStatusCard(),
-                          const SizedBox(height: 16),
                           _buildPhotosSection(),
                           const SizedBox(height: 16),
                           _buildMemoSection(),
                           const SizedBox(height: 16),
                           _buildStorageLocationSection(),
+                          const SizedBox(height: 16),
+                          _buildQRScanSection(),
                           const SizedBox(height: 80), // 下部ボタン分の余白
                         ],
                       ),
                     ),
                   ),
-                  // 固定配置の封印ボタン
+                  // 固定配置のボタン
                   Container(
                     decoration: BoxDecoration(
                       color: Theme.of(context).scaffoldBackgroundColor,
@@ -390,12 +350,14 @@ class _SealPageState extends ConsumerState<SealPage> {
                     padding: const EdgeInsets.all(16),
                     child: SafeArea(
                       child: ElevatedButton.icon(
-                        onPressed: saveBox,
-                        icon: const Icon(Icons.lock),
-                        label: const Text('封印する'),
+                        onPressed: scannedQRCodes.isEmpty ? null : saveBox,
+                        icon: const Icon(Icons.lock, size: 24),
+                        label: const Text('封印する', style: TextStyle(fontSize: 18)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
+                          backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey,
+                          disabledForegroundColor: Colors.white70,
                           padding: const EdgeInsets.all(16),
                           minimumSize: const Size(double.infinity, 56),
                           shape: RoundedRectangleBorder(
@@ -411,7 +373,7 @@ class _SealPageState extends ConsumerState<SealPage> {
     );
   }
 
-  Widget _buildQRStatusCard() {
+  Widget _buildQRScanSection() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -423,17 +385,19 @@ class _SealPageState extends ConsumerState<SealPage> {
                 const Icon(Icons.qr_code_2, color: Colors.indigo),
                 const SizedBox(width: 8),
                 Text(
-                  'QRコード',
+                  'QRコードをスキャン',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              '${scannedQRCodes.length}面スキャン済み',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.indigo,
-                    fontWeight: FontWeight.bold,
+              scannedQRCodes.isEmpty
+                  ? '箱を閉じてQRシールを貼り、スキャンしてください'
+                  : '${scannedQRCodes.length}面スキャン済み',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scannedQRCodes.isEmpty ? Colors.grey.shade700 : Colors.green.shade700,
+                    fontWeight: scannedQRCodes.isEmpty ? FontWeight.normal : FontWeight.bold,
                   ),
             ),
             if (boxId != null) ...[
@@ -447,15 +411,6 @@ class _SealPageState extends ConsumerState<SealPage> {
             ],
             if (scannedQRCodes.isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 12),
-              Text(
-                '読み取り済みQR',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -471,7 +426,6 @@ class _SealPageState extends ConsumerState<SealPage> {
                     onDeleted: () {
                       setState(() {
                         scannedQRCodes.remove(faceId);
-                        // 全て削除された場合はboxIdもリセット
                         if (scannedQRCodes.isEmpty) {
                           boxId = null;
                         }
@@ -483,26 +437,35 @@ class _SealPageState extends ConsumerState<SealPage> {
             ],
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  isScanning = true;
-                });
-              },
-              icon: const Icon(Icons.qr_code_scanner, size: 32),
-              label: const Text(
-                'QR追加',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              onPressed: openQRScanPage,
+              icon: const Icon(Icons.qr_code_scanner, size: 28),
+              label: Text(
+                scannedQRCodes.isEmpty ? 'QRをスキャン' : 'QRを追加スキャン',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 20),
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                minimumSize: const Size(double.infinity, 56),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> openQRScanPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SealQRScanPage(
+          currentBoxId: boxId,
+          scannedFaceIds: scannedQRCodes.keys.toSet(),
+          onQRScanned: handleQRCodeScanned,
         ),
       ),
     );

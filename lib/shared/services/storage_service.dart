@@ -13,6 +13,7 @@
 
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image/image.dart' as img;
 import '../../core/constants/app_constants.dart';
@@ -67,21 +68,36 @@ class StorageService {
     required File file,
     required int index,
   }) async {
-    final compressedData = await compressImage(file);
-    final storagePath = 'boxes/$boxId/photos/photo_$index.jpg';
-    final ref = _storage.ref().child(storagePath);
+    try {
+      debugPrint('[StorageService] Starting upload for box: $boxId, index: $index');
+      
+      final compressedData = await compressImage(file);
+      debugPrint('[StorageService] Image compressed: ${compressedData.length} bytes');
+      
+      final storagePath = 'boxes/$boxId/photos/photo_$index.jpg';
+      debugPrint('[StorageService] Storage path: $storagePath');
+      
+      final ref = _storage.ref().child(storagePath);
+      debugPrint('[StorageService] Reference created, starting upload...');
 
-    await ref.putData(
-      Uint8List.fromList(compressedData),
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
+      await ref.putData(
+        Uint8List.fromList(compressedData),
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      debugPrint('[StorageService] Upload completed, getting download URL...');
 
-    final downloadUrl = await ref.getDownloadURL();
+      final downloadUrl = await ref.getDownloadURL();
+      debugPrint('[StorageService] Download URL obtained: $downloadUrl');
 
-    return {
-      'url': downloadUrl,
-      'storagePath': storagePath,
-    };
+      return {
+        'url': downloadUrl,
+        'storagePath': storagePath,
+      };
+    } catch (e, stackTrace) {
+      debugPrint('[StorageService] ERROR during upload: $e');
+      debugPrint('[StorageService] StackTrace: $stackTrace');
+      rethrow;
+    }
   }
 
   /// 画像を削除する
