@@ -12,7 +12,20 @@
           "package_name": "com.example.wcm_fujin_mobile_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "569091665840-f0u5ivoid6m4e6bpnin7h6nkjo0j7fhs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.wcm_fujin_mobile_app",
+            "certificate_hash": "1d12a87b38395d93a4d3d688a0e53d70ffc032df"
+          }
+        },
+        {
+          "client_id": "569091665840-e9lfuferfmt3vcgj8g28ju47lk58lscp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCKFM5iTkalrjqoGZ_k1c4031KUM5NnvfY"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "569091665840-e9lfuferfmt3vcgj8g28ju47lk58lscp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "569091665840-975nv1vg80449nchvbmkg62cee80lers.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.wcmFujinMobileApp"
+              }
+            }
+          ]
         }
       }
     }
