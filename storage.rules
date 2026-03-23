@@ -1,49 +1,21 @@
 rules_version = '2';
 
 // Firebase Storage Security Rules for 封神 (Fujin) App
-// Phase 1: MVP - 認証機能なし
+// Phase 1.1: 認証済みユーザーのみアクセス可能
 
 service firebase.storage {
   match /b/{bucket}/o {
-    
+
     // boxes配下のファイル
-    // Phase 1: 誰でも読み書き可能（開発・テスト用）
-    // ⚠️ 本番リリース前にPhase 2のルールに変更すること
+    // 認証済みユーザーのみ読み書き可能
+    // （箱の所有者チェックは Firestore 側で担保）
     match /boxes/{boxId}/{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
-    
+
     // その他のパスへのアクセスは拒否
     match /{allPaths=**} {
       allow read, write: if false;
     }
   }
 }
-
-/*
-====================================================
-Phase 2（次期バージョン）で使用するルール:
-
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /boxes/{boxId}/{allPaths=**} {
-      // 認証済みユーザーのみ読み取り可能
-      allow read: if request.auth != null;
-      
-      // 箱の所有者のみ書き込み・削除可能
-      allow write: if request.auth != null 
-        && request.auth.uid == getBoxMetadata(boxId).userId;
-      
-      // 共有されたユーザーも読み取り可能
-      allow read: if request.auth != null 
-        && request.auth.uid in getBoxMetadata(boxId).sharedWith;
-    }
-    
-    // メタデータ取得用関数
-    function getBoxMetadata(boxId) {
-      return firestore.get(/databases/(default)/documents/boxes/$(boxId)).data;
-    }
-  }
-}
-====================================================
-*/

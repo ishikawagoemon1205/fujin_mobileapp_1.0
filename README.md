@@ -1,15 +1,25 @@
 # 封神 (Fujin) - Mobile App
 
-段ボール箱や封筒の中身を記録・管理し、開封せずに内容物を確認できる革新的な管理システム。
+**「この梱包物は、誰にも開けられていない」ことをデジタルで証明するアプリ。**
 
-## 📱 アプリ概要
+QRコードシールを梱包物の開閉口に貼って封印し、スマートフォンで全シールを読み取ることで未開封を検証する、物理的改ざん検知システム。
 
-複数のQRコードシールを使った「封印性の証明」により、未開封状態を検証可能にする管理アプリ。
+## 📱 主な機能
 
-### 主な機能
-- 🔒 **封印する**: 箱の中身を記録してQRシールで封印
-- 🔍 **確認する**: QRコードをスキャンして中身を確認
-- 📦 **封印一覧**: 封印した箱を一覧で管理
+| 機能 | 概要 |
+|------|------|
+| 🔒 **封印する** | 箱の中身を撮影・記録し、QRシールで封印状態をデジタル登録 |
+| 🔍 **確認する** | QRコードをスキャンして封印状態と中身を確認（箱を開けずに） |
+| 📦 **開封する** | 全QRを検証し、正常開封 or 破損（不正開封の可能性）を記録 |
+| 📂 **封印一覧** | 登録した全ての箱をステータス別に一覧表示 |
+| 📋 **箱詳細** | 箱の完全な情報（写真・メモ・QR情報・操作履歴）を表示 |
+
+## 🔐 認証
+
+- メールアドレス＋パスワード認証
+- Google アカウント認証
+- パスワードリセット（メール送信）
+- 未ログインユーザーは全機能アクセス不可（認証ガード）
 
 ---
 
@@ -23,20 +33,18 @@ flutter pub get
 
 ### 2. Firebase の設定
 
-#### Firestore
-すでに設定済みです。
+本プロジェクトは Firebase（Firestore, Storage, Auth）を使用します。
+`firebase_options.dart` は設定済みです。
 
-#### Storage（写真アップロード機能）
-詳細は [FIREBASE_STORAGE_SETUP.md](./FIREBASE_STORAGE_SETUP.md) を参照してください。
+#### Security Rules のデプロイ
 
-**簡単な手順:**
-1. [Firebase Console](https://console.firebase.google.com/) でStorageを有効化
-2. ロケーション: `asia-northeast1` (東京)
-3. テストモードで開始
-4. Security Rulesをデプロイ:
-   ```bash
-   ./deploy_storage_rules.sh
-   ```
+```bash
+# Firestore Rules
+firebase deploy --only firestore:rules
+
+# Storage Rules
+./deploy_storage_rules.sh
+```
 
 ### 3. アプリの起動
 
@@ -48,121 +56,95 @@ flutter run
 
 ## 📂 プロジェクト構造
 
+Clean Architecture（presentation / domain / data の3層分離）を採用しています。
+
 ```
 lib/
-├── main.dart                 # エントリーポイント
-├── app.dart                  # アプリケーションルート
-├── core/                     # コア機能
-│   ├── constants/           # 定数
-│   ├── theme/               # テーマ設定
-│   ├── utils/               # ユーティリティ
-│   └── router.dart          # ルーティング設定
-├── features/                 # 機能別モジュール
+├── main.dart                 # エントリーポイント（Firebase初期化）
+├── app.dart                  # ルートWidget（認証状態による画面切替）
+├── core/                     # アプリ横断の基盤
+│   ├── constants/           # 定数定義
+│   ├── theme/               # テーマ設定（Material Design 3）
+│   ├── utils/               # QRコードユーティリティ
+│   └── router.dart          # Beamerルーティング定義
+├── features/                 # 機能別モジュール（各3層構造）
+│   ├── auth/                # 認証（ログイン・サインアップ・パスワードリセット）
 │   ├── home/                # ホーム画面
 │   ├── seal/                # 封印機能
 │   ├── verify/              # 確認機能
 │   ├── unseal/              # 開封機能
 │   ├── box_list/            # 箱一覧
 │   └── box_detail/          # 箱詳細
-└── shared/                   # 共有モジュール
-    ├── models/              # データモデル
-    ├── repositories/        # リポジトリ
-    ├── services/            # サービス（Firebase等）
-    └── widgets/             # 共有ウィジェット
+└── shared/                   # 機能横断の共有レイヤー
+    ├── models/              # データモデル（Box, AppUser）
+    ├── repositories/        # Riverpod Provider 定義
+    └── widgets/             # 共有Widget（QRスキャン）
 ```
+
+各 feature は以下の3層で構成されます：
+
+| 層 | 責務 |
+|----|------|
+| `presentation/` | UI（Widget）と状態管理 |
+| `domain/` | ビジネスロジック（UseCase）と Repository インターフェース |
+| `data/` | 外部データアクセス（Firestore, Storage の実装） |
 
 ---
 
 ## 📚 ドキュメント
 
-- [開発仕様書](./.github/copilot-instructions.md) - 詳細な設計・仕様
-- [Firebase Storage セットアップ](./FIREBASE_STORAGE_SETUP.md) - ストレージ設定手順
-- [QRコード仕様](./QR_CODE_SPECIFICATION.txt) - QRコードフォーマット
-- [デバッグガイド](./DEBUG_LOG_GUIDE.md) - デバッグログの見方
-- [特許概要](./PATENT_SUMMARY.md) - 「封神プロトコル」の特許情報
+| 内容 | 参照先 |
+|------|--------|
+| Phase 1.0 の目的・機能要件 | [`docs/phase1.0/要件定義書.md`](docs/phase1.0/要件定義書.md) |
+| Phase 1.0 の技術スタック・データモデル | [`docs/phase1.0/詳細設計書.md`](docs/phase1.0/詳細設計書.md) |
+| Phase 1.1 の目的・Clean Architecture・認証要件 | [`docs/phase1.1/要件定義書.md`](docs/phase1.1/要件定義書.md) |
+| Phase 1.1 の設計原則・ディレクトリ構成・認証フロー | [`docs/phase1.1/詳細設計書.md`](docs/phase1.1/詳細設計書.md) |
+| クライアント保有特許の技術概要 | [`docs/patent/PATENT_SUMMARY.md`](docs/patent/PATENT_SUMMARY.md) |
+| Copilot 向けプロジェクト規約 | [`.github/copilot-instructions.md`](.github/copilot-instructions.md) |
 
 ---
 
 ## 🛠️ 開発コマンド
 
-### ビルド
 ```bash
-# Android
-flutter build apk
+# ビルド
+flutter build apk      # Android
+flutter build ios       # iOS
 
-# iOS
-flutter build ios
-```
-
-### テスト
-```bash
+# テスト
 flutter test
-```
 
-### コード解析
-```bash
+# コード解析
 flutter analyze
-```
 
-### Firebase Rulesデプロイ
-```bash
-# Storage Rules
-./deploy_storage_rules.sh
-
-# Firestore Rules（将来）
+# Firebase Rules デプロイ
 firebase deploy --only firestore:rules
+./deploy_storage_rules.sh
 ```
 
 ---
 
-## 🔧 トラブルシューティング
+## � 開発フェーズ
 
-### 写真がアップロードできない
-→ [FIREBASE_STORAGE_SETUP.md](./FIREBASE_STORAGE_SETUP.md) の「トラブルシューティング」を参照
-
-### QRコードがスキャンできない
-→ カメラ権限が許可されているか確認
-
----
-
-## 📝 開発ガイドライン
-
-### コーディング規約
-- **処理の中にコメントを入れない** - 変数名・関数名で処理内容を表現
-- **`dynamic`型は絶対に使用禁止** - 適切な型定義を使用
-- ファイル冒頭に必ず「目的」「処理構造」を記載
-
-詳細は [開発仕様書](./.github/copilot-instructions.md) を参照。
+| フェーズ | 状態 | 内容 |
+|---------|------|------|
+| Phase 1.0 | ✅ 完了 | 封印・確認・開封のMVP。Firebase連携。認証なし |
+| Phase 1.1 | ✅ 完了 | Clean Architecture完全移行・ユーザー認証（Email+Google）・ドキュメント整理 |
+| Phase 2 以降 | 📅 将来構想 | 共有・グループ管理・通知・統計 |
 
 ---
 
-## 📅 開発フェーズ
+## 📝 コーディング規約
 
-### Phase 1: MVP（現在）
-- [x] 基本的な封印・確認・開封機能
-- [x] QRコードスキャン
-- [x] 写真アップロード
-- [ ] ストレージ有効化・テスト
+- **`dynamic` 型は絶対に使用禁止** — `Object?` または適切な型を使う
+- **処理の途中にコメントを入れない** — 変数名・関数名で意図を表現する
+- **全ファイル冒頭に目的と処理構造を記載**
+- **全 public class / function にドキュメントコメント**
 
-### Phase 2: ユーザー管理（次期）
-- [ ] 認証機能
-- [ ] オフライン対応
-- [ ] 検索・フィルタリング
-
-### Phase 3: コラボレーション（将来）
-- [ ] 箱の共有機能
-- [ ] グループ管理
-- [ ] 統計ダッシュボード
+詳細は [`.github/copilot-instructions.md`](.github/copilot-instructions.md) を参照。
 
 ---
 
 ## 📄 ライセンス
 
 Copyright © 2026 封神プロジェクト
-
----
-
-## 🤝 コントリビューション
-
-開発に参加する場合は、必ず [開発仕様書](./.github/copilot-instructions.md) を読んでください。
-
