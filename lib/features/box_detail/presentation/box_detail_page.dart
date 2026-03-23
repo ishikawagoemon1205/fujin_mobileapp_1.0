@@ -18,6 +18,7 @@ import 'package:beamer/beamer.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
+import '../../auth/presentation/auth_gate.dart';
 
 /// 箱詳細画面
 class BoxDetailPage extends ConsumerStatefulWidget {
@@ -51,7 +52,8 @@ class _BoxDetailPageState extends ConsumerState<BoxDetailPage> {
       });
 
       final getBoxDetailUseCase = ref.read(getBoxDetailUseCaseProvider);
-      final box = await getBoxDetailUseCase.execute(widget.boxId);
+      final userId = ref.read(authStateProvider).value?.uid ?? '';
+      final box = await getBoxDetailUseCase.execute(widget.boxId, userId);
 
       if (box == null) {
         setState(() {

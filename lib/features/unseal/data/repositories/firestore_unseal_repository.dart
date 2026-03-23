@@ -24,10 +24,12 @@ class FirestoreUnsealRepository implements UnsealRepository {
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   @override
-  Future<Box?> getBox(String boxId) async {
+  Future<Box?> getBox(String boxId, String userId) async {
     final doc = await _firestore.collection('boxes').doc(boxId).get();
     if (!doc.exists) return null;
-    return _fromFirestore(boxId, doc.data()!);
+    final box = _fromFirestore(boxId, doc.data()!);
+    if (box.userId != userId) return null;
+    return box;
   }
 
   @override

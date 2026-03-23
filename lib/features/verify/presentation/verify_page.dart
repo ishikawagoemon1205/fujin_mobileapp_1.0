@@ -21,6 +21,7 @@ import '../../../core/utils/qr_utils.dart';
 import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
 import '../../../shared/widgets/qr_scan_page.dart';
+import '../../auth/presentation/auth_gate.dart';
 
 /// 確認画面
 class VerifyPage extends ConsumerStatefulWidget {
@@ -53,10 +54,11 @@ class _VerifyPageState extends ConsumerState<VerifyPage> {
 
     try {
       final getBoxUseCase = ref.read(getBoxUseCaseProvider);
-      final box = await getBoxUseCase.execute(boxId);
+      final userId = ref.read(authStateProvider).value?.uid ?? '';
+      final box = await getBoxUseCase.execute(boxId, userId);
 
       if (box == null) {
-        showErrorDialog('箱が見つかりませんでした');
+        showErrorDialog('箱が見つかりませんでした（未登録または他のユーザーの箱です）');
         setState(() {
           isLoading = false;
           isScanning = true;

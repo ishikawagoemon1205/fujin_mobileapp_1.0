@@ -16,10 +16,12 @@ import '../repositories/unseal_repository.dart';
 /// 開封パラメータ
 class UnsealBoxParams {
   final String boxId;
+  final String userId;
   final Set<String> scannedFaceIds;
 
   const UnsealBoxParams({
     required this.boxId,
+    required this.userId,
     required this.scannedFaceIds,
   });
 }
@@ -36,7 +38,7 @@ class UnsealBoxUseCase {
   ///
   /// Returns 更新後のステータス（opened または tampered）
   Future<BoxStatus> execute(UnsealBoxParams params) async {
-    final box = await _repository.getBox(params.boxId);
+    final box = await _repository.getBox(params.boxId, params.userId);
     if (box == null) {
       throw BoxNotFoundException(params.boxId);
     }

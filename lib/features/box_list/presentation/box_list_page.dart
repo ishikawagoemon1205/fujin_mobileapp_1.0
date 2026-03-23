@@ -18,6 +18,7 @@ import 'package:beamer/beamer.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
+import '../../auth/presentation/auth_gate.dart';
 
 /// 箱一覧画面
 class BoxListPage extends ConsumerStatefulWidget {
@@ -72,6 +73,19 @@ class _BoxListPageState extends ConsumerState<BoxListPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authStateProvider, (previous, next) {
+      final prevUid = previous?.value?.uid;
+      final nextUid = next.value?.uid;
+      if (prevUid != nextUid) {
+        setState(() {
+          boxes = [];
+          errorMessage = null;
+          isLoading = true;
+        });
+        loadBoxes();
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('封印一覧'),

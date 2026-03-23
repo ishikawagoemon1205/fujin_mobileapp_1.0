@@ -22,10 +22,11 @@ class GetBoxDetailUseCase {
   /// 箱詳細を取得し、閲覧記録を残す
   ///
   /// [boxId] 取得対象の箱ID
+  /// [userId] ログイン中のユーザーID
   ///
-  /// Returns 箱データ、存在しない場合はnull
-  Future<Box?> execute(String boxId) async {
-    final box = await _repository.getBox(boxId);
+  /// Returns 箱データ、存在しない・他ユーザーの箱の場合はnull
+  Future<Box?> execute(String boxId, String userId) async {
+    final box = await _repository.getBox(boxId, userId);
     if (box == null) return null;
 
     await _repository.updateLastViewedAt(boxId);

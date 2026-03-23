@@ -20,6 +20,7 @@ import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
 import '../../../shared/widgets/qr_scan_page.dart';
 import '../domain/usecases/unseal_box_usecase.dart';
+import '../../auth/presentation/auth_gate.dart';
 
 /// 開封画面
 class UnsealPage extends ConsumerStatefulWidget {
@@ -50,7 +51,8 @@ class _UnsealPageState extends ConsumerState<UnsealPage> {
   Future<void> loadBoxData() async {
     try {
       final unsealRepo = ref.read(unsealRepositoryProvider);
-      final box = await unsealRepo.getBox(widget.boxId);
+      final userId = ref.read(authStateProvider).value?.uid ?? '';
+      final box = await unsealRepo.getBox(widget.boxId, userId);
 
       if (box == null) {
         showErrorDialog('箱が見つかりませんでした');
@@ -141,9 +143,11 @@ class _UnsealPageState extends ConsumerState<UnsealPage> {
 
     try {
       final unsealUseCase = ref.read(unsealBoxUseCaseProvider);
+      final userId = ref.read(authStateProvider).value?.uid ?? '';
       final newStatus = await unsealUseCase.execute(
         UnsealBoxParams(
           boxId: widget.boxId,
+          userId: userId,
           scannedFaceIds: scannedFaces,
         ),
       );

@@ -26,10 +26,11 @@ class FirestoreBoxListRepository implements BoxListRepository {
     final snapshot = await _firestore
         .collection('boxes')
         .where('metadata.userId', isEqualTo: userId)
-        .get();
+        .get(const GetOptions(source: Source.server));
 
     return snapshot.docs
         .map((doc) => _fromFirestore(doc.id, doc.data()))
+        .where((box) => box.userId.isNotEmpty && box.userId == userId)
         .toList();
   }
 

@@ -14,12 +14,13 @@ import '../../../../shared/models/box_model.dart';
 
 /// 開封機能の Repository インターフェース
 abstract class UnsealRepository {
-  /// boxId で箱を取得する
+  /// boxId で箱を取得する（userId が一致しない場合は null を返す）
   ///
   /// [boxId] 取得対象の箱ID
+  /// [userId] ログイン中のユーザーID
   ///
-  /// Returns 箱データ、存在しない場合はnull
-  Future<Box?> getBox(String boxId);
+  /// Returns 箱データ、存在しない・他ユーザーの箱の場合はnull
+  Future<Box?> getBox(String boxId, String userId);
 
   /// 箱のステータスを更新する
   ///
