@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /boxes/{boxId} {
+      // 認証済みユーザーなら存在確認（get）は誰でも可能
+      // （封印時の boxId 重複チェックに必要）
+      allow get: if request.auth != null;
+
+      // 一覧取得はアプリ側の where クエリで userId を絞り込むため、認証済みであれば許可
+      // （Firestore の where クエリ評価時は resource が使えないため、resource チェックは不可）
+      allow list: if request.auth != null;
+
+      // 更新・削除は自分の箱のみ
+      allow update, delete: if request.auth != null
+                             && request.auth.uid == resource.data.metadata.userId;
+
+      // 新規作成時は userId が自分の UID と一致することを確認
+      allow create: if request.auth != null
+                    && request.resource.data.metadata.userId == request.auth.uid;
+    }
+  }
+}
