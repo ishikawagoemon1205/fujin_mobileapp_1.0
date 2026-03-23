@@ -2,16 +2,14 @@
 ====================================================
 目的:
   - 箱（Box）のデータモデル定義
-  - FirestoreとDartオブジェクト間の変換
+  - アプリ全体で使用するドメインオブジェクト
 
 処理構造:
   - データ構造の定義
-  - Firestore変換処理
   - ステータス管理
+  - コピーメソッド
 ====================================================
 */
-
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// 箱のステータス
 enum BoxStatus {
@@ -23,6 +21,7 @@ enum BoxStatus {
   final String value;
   final String label;
 
+  /// 文字列からステータスを取得する
   static BoxStatus fromString(String value) {
     return BoxStatus.values.firstWhere(
       (status) => status.value == value,
@@ -44,23 +43,6 @@ class QRFace {
     required this.scannedAt,
     required this.checksum,
   });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'qrCode': qrCode,
-      'scannedAt': Timestamp.fromDate(scannedAt),
-      'checksum': checksum,
-    };
-  }
-
-  factory QRFace.fromMap(String faceId, Map<String, dynamic> map) {
-    return QRFace(
-      faceId: faceId,
-      qrCode: map['qrCode'] as String,
-      scannedAt: (map['scannedAt'] as Timestamp).toDate(),
-      checksum: map['checksum'] as String,
-    );
-  }
 }
 
 /// 写真情報
@@ -74,22 +56,6 @@ class BoxPhoto {
     required this.storagePath,
     required this.uploadedAt,
   });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'url': url,
-      'storagePath': storagePath,
-      'uploadedAt': Timestamp.fromDate(uploadedAt),
-    };
-  }
-
-  factory BoxPhoto.fromMap(Map<String, dynamic> map) {
-    return BoxPhoto(
-      url: map['url'] as String,
-      storagePath: map['storagePath'] as String,
-      uploadedAt: (map['uploadedAt'] as Timestamp).toDate(),
-    );
-  }
 }
 
 /// 箱の履歴情報
@@ -103,27 +69,12 @@ class BoxHistory {
     required this.action,
     required this.details,
   });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'timestamp': Timestamp.fromDate(timestamp),
-      'action': action,
-      'details': details,
-    };
-  }
-
-  factory BoxHistory.fromMap(Map<String, dynamic> map) {
-    return BoxHistory(
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
-      action: map['action'] as String,
-      details: map['details'] as String,
-    );
-  }
 }
 
 /// 箱のデータモデル
 class Box {
   final String boxId;
+  final String userId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final BoxStatus status;
@@ -138,6 +89,7 @@ class Box {
 
   const Box({
     required this.boxId,
+    required this.userId,
     required this.createdAt,
     required this.updatedAt,
     required this.status,
@@ -151,63 +103,9 @@ class Box {
     required this.history,
   });
 
-  /// Firestoreドキュメントに変換
-  Map<String, dynamic> toFirestore() {
-    return {
-      'metadata': {
-        'createdAt': Timestamp.fromDate(createdAt),
-        'updatedAt': Timestamp.fromDate(updatedAt),
-        'status': status.value,
-        'storageLocation': storageLocation,
-        'qrFaceCount': qrFaceCount,
-        'openedAt': openedAt != null ? Timestamp.fromDate(openedAt!) : null,
-        'lastViewedAt': Timestamp.fromDate(lastViewedAt),
-      },
-      'faces': faces.map((key, value) => MapEntry(key, value.toMap())),
-      'contents': {
-        'photos': photos.map((photo) => photo.toMap()).toList(),
-        'memo': memo,
-      },
-      'history': history.map((h) => h.toMap()).toList(),
-    };
-  }
-
-  /// Firestoreドキュメントから変換
-  factory Box.fromFirestore(String boxId, Map<String, dynamic> doc) {
-    final metadata = doc['metadata'] as Map<String, dynamic>;
-    final facesData = doc['faces'] as Map<String, dynamic>? ?? {};
-    final contents = doc['contents'] as Map<String, dynamic>;
-    final historyData = doc['history'] as List<dynamic>? ?? [];
-
-    return Box(
-      boxId: boxId,
-      createdAt: (metadata['createdAt'] as Timestamp).toDate(),
-      updatedAt: (metadata['updatedAt'] as Timestamp).toDate(),
-      status: BoxStatus.fromString(metadata['status'] as String),
-      storageLocation: metadata['storageLocation'] as String,
-      qrFaceCount: metadata['qrFaceCount'] as int,
-      openedAt: metadata['openedAt'] != null
-          ? (metadata['openedAt'] as Timestamp).toDate()
-          : null,
-      lastViewedAt: (metadata['lastViewedAt'] as Timestamp).toDate(),
-      faces: facesData.map(
-        (key, value) => MapEntry(
-          key,
-          QRFace.fromMap(key, value as Map<String, dynamic>),
-        ),
-      ),
-      photos: (contents['photos'] as List<dynamic>)
-          .map((p) => BoxPhoto.fromMap(p as Map<String, dynamic>))
-          .toList(),
-      memo: contents['memo'] as String,
-      history: historyData
-          .map((h) => BoxHistory.fromMap(h as Map<String, dynamic>))
-          .toList(),
-    );
-  }
-
-  /// コピーを作成
+  /// コピーを作成する
   Box copyWith({
+    String? userId,
     DateTime? updatedAt,
     BoxStatus? status,
     String? storageLocation,
@@ -220,6 +118,7 @@ class Box {
   }) {
     return Box(
       boxId: boxId,
+      userId: userId ?? this.userId,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       status: status ?? this.status,

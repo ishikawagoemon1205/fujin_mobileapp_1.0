@@ -19,6 +19,7 @@ import '../../../core/utils/qr_utils.dart';
 import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
 import '../../../shared/widgets/qr_scan_page.dart';
+import '../domain/usecases/unseal_box_usecase.dart';
 
 /// 開封画面
 class UnsealPage extends ConsumerStatefulWidget {
@@ -48,8 +49,8 @@ class _UnsealPageState extends ConsumerState<UnsealPage> {
 
   Future<void> loadBoxData() async {
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final box = await firestoreService.getBox(widget.boxId);
+      final unsealRepo = ref.read(unsealRepositoryProvider);
+      final box = await unsealRepo.getBox(widget.boxId);
 
       if (box == null) {
         showErrorDialog('箱が見つかりませんでした');
@@ -139,45 +140,40 @@ class _UnsealPageState extends ConsumerState<UnsealPage> {
     });
 
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final newStatus = success ? BoxStatus.opened : BoxStatus.tampered;
-
-      await firestoreService.updateBoxStatus(widget.boxId, newStatus);
-
-      final history = BoxHistory(
-        timestamp: DateTime.now(),
-        action: success ? 'opened' : 'tampered',
-        details: success
-            ? '全てのQRコードが検証され、正常に開封されました'
-            : 'QRコードの検証に失敗しました',
+      final unsealUseCase = ref.read(unsealBoxUseCaseProvider);
+      final newStatus = await unsealUseCase.execute(
+        UnsealBoxParams(
+          boxId: widget.boxId,
+          scannedFaceIds: scannedFaces,
+        ),
       );
 
-      await firestoreService.addHistory(widget.boxId, history);
+      final isSuccess = newStatus == BoxStatus.opened;
 
       if (mounted) {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             title: Row(
               children: [
                 Icon(
-                  success ? Icons.check_circle : Icons.warning,
-                  color: success ? Colors.green : Colors.red,
+                  isSuccess ? Icons.check_circle : Icons.warning,
+                  color: isSuccess ? Colors.green : Colors.red,
                 ),
                 const SizedBox(width: 8),
-                Text(success ? '開封完了' : '検証失敗'),
+                Text(isSuccess ? '開封完了' : '検証失敗'),
               ],
             ),
             content: Text(
-              success
+              isSuccess
                   ? '全てのQRコードが検証され、正常に開封されました。'
                   : 'QRコードの検証に失敗しました。\n箱が破損している可能性があります。',
             ),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.of(context).pop();
+                  Navigator.of(dialogContext).pop();
                   context.beamToNamed('/');
                 },
                 child: const Text('ホームに戻る'),

@@ -16,6 +16,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'app.dart';
+import 'features/auth/data/repositories/firebase_auth_repository.dart';
+import 'features/auth/presentation/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,8 +27,11 @@ Future<void> main() async {
   );
   
   runApp(
-    const ProviderScope(
-      child: FujinApp(),
+    ProviderScope(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(FirebaseAuthRepository()),
+      ],
+      child: const FujinApp(),
     ),
   );
 }

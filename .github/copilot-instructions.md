@@ -20,8 +20,11 @@ QRコードシールを梱包物の開閉口に貼って封印し、スマート
 
 | 知りたいこと | 参照先 |
 |------------|--------|
-| アプリの目的・ユーザー・機能要件・フェーズ計画 | [`docs/phase1.0/要件定義書.md`](../docs/phase1.0/要件定義書.md) |
-| 技術スタック・ディレクトリ構成・データモデル・API仕様 | [`docs/phase1.0/詳細設計書.md`](../docs/phase1.0/詳細設計書.md) |
+| Phase 1.0 の目的・機能要件 | [`docs/phase1.0/要件定義書.md`](../docs/phase1.0/要件定義書.md) |
+| Phase 1.0 の技術スタック・ディレクトリ構成・データモデル | [`docs/phase1.0/詳細設計書.md`](../docs/phase1.0/詳細設計書.md) |
+| Phase 1.1 の目的・Clean Architecture 完了定義・認証要件 | [`docs/phase1.1/要件定義書.md`](../docs/phase1.1/要件定義書.md) |
+| Phase 1.1 の設計原則根拠・移行後ディレクトリ構成・認証フロー | [`docs/phase1.1/詳細設計書.md`](../docs/phase1.1/詳細設計書.md) |
+| クライアント保有特許の技術概要 | [`docs/patent/PATENT_SUMMARY.md`](../docs/patent/PATENT_SUMMARY.md) |
 
 ---
 
@@ -30,7 +33,7 @@ QRコードシールを梱包物の開閉口に貼って封印し、スマート
 | フェーズ | 状態 | 内容 |
 |---------|------|------|
 | Phase 1.0 | ✅ 実装完了 | 封印・確認・開封のMVP。Firebase連携。認証なし |
-| Phase 1.x | 🔜 次期開発 | ユーザー認証・一覧強化・オフライン対応 |
+| Phase 1.1 | � 実装予定 | Clean Architecture完全移行・ユーザー認証（Email+Google）・ドキュメント整理 |
 | Phase 2 以降 | 📅 将来構想 | 共有・グループ管理・通知・統計 |
 
 ---

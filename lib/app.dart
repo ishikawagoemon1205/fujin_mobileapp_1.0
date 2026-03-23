@@ -3,25 +3,29 @@
 目的:
   - アプリケーションのルートウィジェット
   - テーマ設定とルーティング設定
+  - 認証ゲートによるアクセス制御
 
 処理構造:
   - テーマ設定（Material Design 3）
   - Beamerルーティングの初期化
-  - アプリケーション全体の構造定義
+  - AuthGate による認証状態の振り分け
 ====================================================
 */
 
 import 'package:flutter/material.dart';
 import 'package:beamer/beamer.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'core/theme/app_theme.dart';
 import 'core/router.dart';
+import 'features/auth/presentation/auth_gate.dart';
 
 /// 封神アプリケーションのルートウィジェット
-class FujinApp extends StatelessWidget {
+class FujinApp extends ConsumerWidget {
   const FujinApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
       title: '封神',
       theme: AppTheme.lightTheme,
@@ -33,6 +37,9 @@ class FujinApp extends StatelessWidget {
       backButtonDispatcher: BeamerBackButtonDispatcher(
         delegate: appRouterDelegate,
       ),
+      builder: (context, child) {
+        return AuthGate(child: child ?? const SizedBox.shrink());
+      },
     );
   }
 }

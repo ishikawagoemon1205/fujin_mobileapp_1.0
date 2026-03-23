@@ -22,6 +22,7 @@ import '../../../core/utils/qr_utils.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/models/box_model.dart';
 import '../../../shared/repositories/box_repository.dart';
+import '../domain/usecases/create_box_usecase.dart';
 import 'seal_qr_scan_page.dart';
 
 /// 封印画面
@@ -157,51 +158,15 @@ class _SealPageState extends ConsumerState<SealPage> {
     });
 
     try {
-      debugPrint('[Flutter SealPage] Getting Firebase services...');
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final storageService = ref.read(storageServiceProvider);
+      debugPrint('[Flutter SealPage] Getting UseCase...');
+      final createBoxUseCase = ref.read(createBoxUseCaseProvider);
+      final userId = ref.read(currentUserIdProvider);
 
-      // 重複チェック: 同じbox-idが既に登録されているか確認
-      debugPrint('[Flutter SealPage] Checking for duplicate box-id: $boxId');
-      final existingBox = await firestoreService.getBox(boxId!).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('重複チェックタイムアウト');
-        },
-      );
-
-      if (existingBox != null) {
-        debugPrint('[Flutter SealPage] Duplicate box found: $boxId');
-        if (mounted) {
-          setState(() {
-            isSaving = false;
-          });
-          showErrorDialog('この箱（ID: $boxId）は既に登録されています');
-        }
+      if (userId == null) {
+        showErrorDialog('ユーザー情報が取得できません。再ログインしてください');
         return;
       }
-      debugPrint('[Flutter SealPage] No duplicate found, proceeding with save...');
 
-      final uploadedPhotos = <BoxPhoto>[];
-
-      debugPrint('[Flutter SealPage] Uploading ${selectedPhotos.length} photos...');
-      for (int i = 0; i < selectedPhotos.length; i++) {
-        debugPrint('[Flutter SealPage] Uploading photo ${i + 1}/${selectedPhotos.length}');
-        final result = await storageService.uploadBoxPhoto(
-          boxId: boxId!,
-          file: selectedPhotos[i],
-          index: i,
-        );
-
-        uploadedPhotos.add(BoxPhoto(
-          url: result['url']!,
-          storagePath: result['storagePath']!,
-          uploadedAt: DateTime.now(),
-        ));
-      }
-      debugPrint('[Flutter SealPage] Photo upload completed');
-
-      debugPrint('[Flutter SealPage] Creating box data structure...');
       final faces = scannedQRCodes.map((faceId, qrCode) {
         final parsed = QRCodeUtils.parseQRCode(qrCode)!;
         return MapEntry(
@@ -215,35 +180,18 @@ class _SealPageState extends ConsumerState<SealPage> {
         );
       });
 
-      final now = DateTime.now();
-      final box = Box(
-        boxId: boxId!,
-        createdAt: now,
-        updatedAt: now,
-        status: BoxStatus.sealed,
-        storageLocation: storageLocationController.text.trim(),
-        qrFaceCount: scannedQRCodes.length,
-        lastViewedAt: now,
-        faces: faces,
-        photos: uploadedPhotos,
-        memo: memoController.text.trim(),
-        history: [
-          BoxHistory(
-            timestamp: now,
-            action: 'sealed',
-            details: '${scannedQRCodes.length}面のQRコードで封印されました',
-          ),
-        ],
+      debugPrint('[Flutter SealPage] Executing CreateBoxUseCase...');
+      await createBoxUseCase.execute(
+        CreateBoxParams(
+          boxId: boxId!,
+          userId: userId,
+          storageLocation: storageLocationController.text.trim(),
+          memo: memoController.text.trim(),
+          faces: faces,
+          photos: selectedPhotos,
+        ),
       );
-
-      debugPrint('[Flutter SealPage] Saving to Firestore...');
-      await firestoreService.createBox(box).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('Firestore接続タイムアウト: 10秒以内に応答がありませんでした');
-        },
-      );
-      debugPrint('[Flutter SealPage] Firestore save completed!');
+      debugPrint('[Flutter SealPage] UseCase execution completed!');
 
       if (mounted) {
         debugPrint('[Flutter SealPage] Showing success message and navigating home');
@@ -260,7 +208,11 @@ class _SealPageState extends ConsumerState<SealPage> {
       debugPrint('[Flutter SealPage] ERROR: $e');
       debugPrint('[Flutter SealPage] StackTrace: $stackTrace');
       if (mounted) {
-        showErrorDialog('保存中にエラーが発生しました: $e');
+        if (e is BoxAlreadyExistsException) {
+          showErrorDialog('この箱（ID: $boxId）は既に登録されています');
+        } else {
+          showErrorDialog('保存中にエラーが発生しました: $e');
+        }
       }
     } finally {
       debugPrint('[Flutter SealPage] Cleanup: setting isSaving=false');

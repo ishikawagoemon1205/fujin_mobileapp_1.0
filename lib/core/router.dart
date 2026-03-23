@@ -3,16 +3,20 @@
 目的:
   - アプリケーションのルーティング設定
   - Beamerを使った画面遷移の定義
+  - 認証ガードによるアクセス制御
 
 処理構造:
-  - ルート定義
-  - 画面遷移パスの設定
+  - 認証ルート定義
+  - 機能ルート定義
   - ルーターデリゲートの初期化
 ====================================================
 */
 
 import 'package:beamer/beamer.dart';
 import 'package:flutter/material.dart';
+import '../features/auth/presentation/login_page.dart';
+import '../features/auth/presentation/signup_page.dart';
+import '../features/auth/presentation/password_reset_page.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/seal/presentation/seal_page.dart';
 import '../features/verify/presentation/verify_page.dart';
@@ -27,6 +31,21 @@ final appRouterDelegate = BeamerDelegate(
             key: ValueKey('home'),
             title: '封神',
             child: HomePage(),
+          ),
+      '/login': (context, state, data) => const BeamPage(
+            key: ValueKey('login'),
+            title: 'ログイン',
+            child: LoginPage(),
+          ),
+      '/signup': (context, state, data) => const BeamPage(
+            key: ValueKey('signup'),
+            title: '新規登録',
+            child: SignUpPage(),
+          ),
+      '/password-reset': (context, state, data) => const BeamPage(
+            key: ValueKey('password-reset'),
+            title: 'パスワードリセット',
+            child: PasswordResetPage(),
           ),
       '/seal': (context, state, data) => const BeamPage(
             key: ValueKey('seal'),

@@ -52,8 +52,8 @@ class _VerifyPageState extends ConsumerState<VerifyPage> {
     }
 
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final box = await firestoreService.getBox(boxId);
+      final getBoxUseCase = ref.read(getBoxUseCaseProvider);
+      final box = await getBoxUseCase.execute(boxId);
 
       if (box == null) {
         showErrorDialog('箱が見つかりませんでした');
@@ -63,8 +63,6 @@ class _VerifyPageState extends ConsumerState<VerifyPage> {
         });
         return;
       }
-
-      await firestoreService.updateLastViewedAt(boxId);
 
       setState(() {
         boxData = box;

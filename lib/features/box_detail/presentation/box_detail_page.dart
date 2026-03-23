@@ -50,8 +50,8 @@ class _BoxDetailPageState extends ConsumerState<BoxDetailPage> {
         errorMessage = null;
       });
 
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final box = await firestoreService.getBox(widget.boxId);
+      final getBoxDetailUseCase = ref.read(getBoxDetailUseCaseProvider);
+      final box = await getBoxDetailUseCase.execute(widget.boxId);
 
       if (box == null) {
         setState(() {
@@ -60,8 +60,6 @@ class _BoxDetailPageState extends ConsumerState<BoxDetailPage> {
         });
         return;
       }
-
-      await firestoreService.updateLastViewedAt(widget.boxId);
 
       setState(() {
         boxData = box;

@@ -39,7 +39,8 @@ dependencies:
   firebase_core: ^3.8.1
   cloud_firestore: ^5.5.2
   firebase_storage: ^12.3.8
-  firebase_auth: ^5.3.4  # Phase 2用
+  firebase_auth: ^5.3.4
+  google_sign_in: ^6.2.2
   
   # QRコード
   mobile_scanner: ^6.0.2

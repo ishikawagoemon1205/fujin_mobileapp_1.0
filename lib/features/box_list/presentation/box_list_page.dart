@@ -45,8 +45,18 @@ class _BoxListPageState extends ConsumerState<BoxListPage> {
         errorMessage = null;
       });
 
-      final firestoreService = ref.read(firestoreServiceProvider);
-      final allBoxes = await firestoreService.getAllBoxes();
+      final getAllBoxesUseCase = ref.read(getAllBoxesUseCaseProvider);
+      final userId = ref.read(currentUserIdProvider);
+
+      if (userId == null) {
+        setState(() {
+          errorMessage = 'ユーザー情報が取得できません';
+          isLoading = false;
+        });
+        return;
+      }
+
+      final allBoxes = await getAllBoxesUseCase.execute(userId);
 
       setState(() {
         boxes = allBoxes;
