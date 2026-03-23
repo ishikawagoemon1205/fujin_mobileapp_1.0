@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/domain/usecases/sign_out_usecase.dart';
+import '../../features/auth/presentation/auth_gate.dart';
 import '../../features/box_detail/data/repositories/firestore_box_detail_repository.dart';
 import '../../features/box_detail/domain/repositories/box_detail_repository.dart';
 import '../../features/box_detail/domain/usecases/get_box_detail_usecase.dart';
@@ -92,7 +93,10 @@ final signOutUseCaseProvider = Provider<SignOutUseCase>((ref) {
 });
 
 /// 現在のユーザーID を取得するヘルパー Provider
+///
+/// authStateProvider（Stream）を watch することで、
+/// ログイン・ログアウト・ユーザー切り替え時に自動的に再計算される
 final currentUserIdProvider = Provider<String?>((ref) {
-  final authRepo = ref.watch(authRepositoryImplProvider);
-  return authRepo.currentUser?.uid;
+  final authState = ref.watch(authStateProvider);
+  return authState.whenData((user) => user?.uid).value;
 });
