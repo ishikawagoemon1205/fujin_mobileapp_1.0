@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:beamer/beamer.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/models/box_model.dart';
+import '../../../shared/models/group_model.dart';
 import '../../../shared/repositories/box_repository.dart';
 import '../../auth/presentation/auth_gate.dart';
 
@@ -30,13 +31,41 @@ class BoxListPage extends ConsumerStatefulWidget {
 
 class _BoxListPageState extends ConsumerState<BoxListPage> {
   List<Box> boxes = [];
+  List<Group> userGroups = [];
   bool isLoading = true;
   String? errorMessage;
+  String? selectedFilter;
 
   @override
   void initState() {
     super.initState();
     loadBoxes();
+    loadUserGroups();
+  }
+
+  Future<void> loadUserGroups() async {
+    try {
+      final getGroupsUseCase = ref.read(getGroupsUseCaseProvider);
+      final userId = ref.read(currentUserIdProvider);
+      if (userId == null) return;
+
+      final groups = await getGroupsUseCase.execute(userId);
+      final joinedGroups =
+          groups.where((g) => g.isJoinedMember(userId)).toList();
+      if (mounted) {
+        setState(() {
+          userGroups = joinedGroups;
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<Box> get filteredBoxes {
+    if (selectedFilter == null) return boxes;
+    if (selectedFilter == 'personal') {
+      return boxes.where((b) => b.groupId == null || b.groupId!.isEmpty).toList();
+    }
+    return boxes.where((b) => b.groupId == selectedFilter).toList();
   }
 
   Future<void> loadBoxes() async {
@@ -172,17 +201,32 @@ class _BoxListPageState extends ConsumerState<BoxListPage> {
       );
     }
 
-    final sealedBoxes = boxes.where((box) => box.status == BoxStatus.sealed).toList();
-    final openedBoxes = boxes.where((box) => box.status == BoxStatus.opened).toList();
-    final tamperedBoxes = boxes.where((box) => box.status == BoxStatus.tampered).toList();
+    final displayBoxes = filteredBoxes;
+    final sealedBoxes = displayBoxes.where((box) => box.status == BoxStatus.sealed).toList();
+    final openedBoxes = displayBoxes.where((box) => box.status == BoxStatus.opened).toList();
+    final tamperedBoxes = displayBoxes.where((box) => box.status == BoxStatus.tampered).toList();
 
     return RefreshIndicator(
       onRefresh: loadBoxes,
       child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
+          buildFilterChips(),
+          const SizedBox(height: 12),
           buildSummaryCard(sealedBoxes.length, openedBoxes.length, tamperedBoxes.length),
           const SizedBox(height: 16),
+          if (displayBoxes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  '該当する箱がありません',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                ),
+              ),
+            ),
           if (sealedBoxes.isNotEmpty) ...[
             buildSectionHeader('封印中', sealedBoxes.length, Colors.green),
             ...sealedBoxes.map((box) => buildBoxCard(box)),
@@ -197,6 +241,50 @@ class _BoxListPageState extends ConsumerState<BoxListPage> {
             buildSectionHeader('破損検知', tamperedBoxes.length, Colors.red),
             ...tamperedBoxes.map((box) => buildBoxCard(box)),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget buildFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          FilterChip(
+            label: const Text('すべて'),
+            selected: selectedFilter == null,
+            onSelected: (_) {
+              setState(() {
+                selectedFilter = null;
+              });
+            },
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            label: const Text('個人'),
+            selected: selectedFilter == 'personal',
+            onSelected: (_) {
+              setState(() {
+                selectedFilter = 'personal';
+              });
+            },
+          ),
+          ...userGroups.map(
+            (group) => Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: FilterChip(
+                avatar: const Icon(Icons.group, size: 16),
+                label: Text(group.name),
+                selected: selectedFilter == group.groupId,
+                onSelected: (_) {
+                  setState(() {
+                    selectedFilter = group.groupId;
+                  });
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -349,6 +437,10 @@ class _BoxListPageState extends ConsumerState<BoxListPage> {
                 ],
               ),
               const SizedBox(height: 8),
+              if (box.groupId != null && box.groupId!.isNotEmpty) ...[
+                _buildGroupBadge(box.groupId!),
+                const SizedBox(height: 8),
+              ],
               if (box.storageLocation.isNotEmpty) ...[
                 Row(
                   children: [
@@ -467,5 +559,35 @@ class _BoxListPageState extends ConsumerState<BoxListPage> {
       case BoxStatus.tampered:
         return Icons.warning;
     }
+  }
+
+  Widget _buildGroupBadge(String groupId) {
+    final groupName = userGroups
+        .where((g) => g.groupId == groupId)
+        .map((g) => g.name)
+        .firstOrNull;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.indigo.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.indigo.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.group, size: 14, color: Colors.indigo[400]),
+          const SizedBox(width: 4),
+          Text(
+            groupName ?? 'グループ',
+            style: TextStyle(
+              color: Colors.indigo[700],
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

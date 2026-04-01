@@ -14,10 +14,12 @@
 import 'dart:math';
 
 /// QRコードのフォーマット: fujin://{box-id}/{face-id}/{checksum}
+/// ユーザーQRのフォーマット: fujin-user://{uid}
 class QRCodeUtils {
   QRCodeUtils._();
 
   static const String _scheme = 'fujin://';
+  static const String _userScheme = 'fujin-user://';
   static const String _base62Chars =
       '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -158,5 +160,35 @@ class QRCodeUtils {
   static String? extractFaceId(String qrCode) {
     final parsed = parseQRCode(qrCode);
     return parsed?['faceId'];
+  }
+
+  /// ユーザーQRコード文字列を生成する
+  ///
+  /// [uid] Firebase Auth の UID
+  ///
+  /// Returns fujin-user://{uid} 形式の文字列
+  static String generateUserQRCode(String uid) {
+    return '$_userScheme$uid';
+  }
+
+  /// ユーザーQRコードかどうか判定する
+  ///
+  /// [qrCode] QRコード文字列
+  ///
+  /// Returns ユーザーQRの場合true
+  static bool isUserQR(String qrCode) {
+    return qrCode.startsWith(_userScheme);
+  }
+
+  /// ユーザーQRコードから UID を抽出する
+  ///
+  /// [qrCode] ユーザーQRコード文字列
+  ///
+  /// Returns UID、形式が不正な場合はnull
+  static String? extractUidFromUserQR(String qrCode) {
+    if (!isUserQR(qrCode)) return null;
+    final uid = qrCode.substring(_userScheme.length);
+    if (uid.isEmpty) return null;
+    return uid;
   }
 }

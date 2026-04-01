@@ -2,11 +2,12 @@
 ====================================================
 目的:
   - 封印機能の Repository インターフェース定義
-  - 封印作成・重複チェック・写真アップロードの抽象化
+  - 封印作成・重複チェック・写真アップロード・グループ通知の抽象化
 
 処理構造:
   - 箱の作成操作の抽象メソッド定義
   - 写真アップロード操作の抽象メソッド定義
+  - グループメンバーへの通知送信の抽象メソッド定義
 ====================================================
 */
 
@@ -39,5 +40,18 @@ abstract class SealRepository {
     required String boxId,
     required File file,
     required int index,
+  });
+
+  /// グループの自分以外の全メンバーに封印完了通知を送る
+  ///
+  /// [groupId] グループID
+  /// [senderUid] 封印を実行したユーザーのUID（この人には通知しない）
+  /// [boxId] 封印した箱のID
+  /// [storageLocation] 保管場所（通知本文に使用）
+  Future<void> notifyGroupMembers({
+    required String groupId,
+    required String senderUid,
+    required String boxId,
+    required String storageLocation,
   });
 }

@@ -35,6 +35,7 @@ class BoxDetailPage extends ConsumerStatefulWidget {
 
 class _BoxDetailPageState extends ConsumerState<BoxDetailPage> {
   Box? boxData;
+  String? groupName;
   bool isLoading = true;
   String? errorMessage;
 
@@ -67,12 +68,32 @@ class _BoxDetailPageState extends ConsumerState<BoxDetailPage> {
         boxData = box;
         isLoading = false;
       });
+
+      if (box.groupId != null && box.groupId!.isNotEmpty) {
+        loadGroupName(box.groupId!);
+      }
     } catch (e) {
       setState(() {
         errorMessage = 'データの取得に失敗しました: $e';
         isLoading = false;
       });
     }
+  }
+
+  Future<void> loadGroupName(String groupId) async {
+    try {
+      final getGroupsUseCase = ref.read(getGroupsUseCaseProvider);
+      final userId = ref.read(currentUserIdProvider);
+      if (userId == null) return;
+
+      final groups = await getGroupsUseCase.execute(userId);
+      final matched = groups.where((g) => g.groupId == groupId).firstOrNull;
+      if (mounted && matched != null) {
+        setState(() {
+          groupName = matched.name;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -216,8 +237,44 @@ class _BoxDetailPageState extends ConsumerState<BoxDetailPage> {
             const Divider(height: 24),
             buildInfoRow(Icons.fingerprint, 'Box ID', boxData!.boxId, isMonospace: true),
             const SizedBox(height: 12),
-            if (boxData!.storageLocation.isNotEmpty)
+            if (boxData!.storageLocation.isNotEmpty) ...[
               buildInfoRow(Icons.place, '保管場所', boxData!.storageLocation),
+              const SizedBox(height: 12),
+            ],
+            if (boxData!.groupId != null && boxData!.groupId!.isNotEmpty)
+              Row(
+                children: [
+                  Icon(Icons.group, size: 20, color: Colors.indigo[400]),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '共有グループ',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          groupName ?? 'グループ',
+                          style: TextStyle(
+                            color: Colors.indigo[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
           ],
         ),
       ),

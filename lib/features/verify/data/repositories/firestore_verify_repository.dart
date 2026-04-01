@@ -28,8 +28,23 @@ class FirestoreVerifyRepository implements VerifyRepository {
     final doc = await _firestore.collection('boxes').doc(boxId).get();
     if (!doc.exists) return null;
     final box = _fromFirestore(boxId, doc.data()!);
-    if (box.userId != userId) return null;
-    return box;
+
+    if (box.userId == userId) return box;
+
+    if (box.groupId != null && box.groupId!.isNotEmpty) {
+      final groupDoc = await _firestore.collection('groups').doc(box.groupId).get();
+      if (groupDoc.exists) {
+        final members = groupDoc.data()?['members'] as Map<String, Object?>?;
+        if (members != null && members.containsKey(userId)) {
+          final memberData = members[userId] as Map<String, Object?>?;
+          if (memberData?['status'] == 'joined') {
+            return box;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -62,6 +77,7 @@ class FirestoreVerifyRepository implements VerifyRepository {
     return Box(
       boxId: boxId,
       userId: metadata['userId'] as String? ?? '',
+      groupId: metadata['groupId'] as String?,
       createdAt: (metadata['createdAt'] as Timestamp).toDate(),
       updatedAt: (metadata['updatedAt'] as Timestamp).toDate(),
       status: BoxStatus.fromString(metadata['status'] as String),

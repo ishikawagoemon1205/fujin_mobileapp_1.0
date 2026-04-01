@@ -21,6 +21,7 @@ import 'package:beamer/beamer.dart';
 import '../../../core/utils/qr_utils.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/models/box_model.dart';
+import '../../../shared/models/group_model.dart';
 import '../../../shared/repositories/box_repository.dart';
 import '../domain/usecases/create_box_usecase.dart';
 import 'seal_qr_scan_page.dart';
@@ -35,11 +36,35 @@ class SealPage extends ConsumerStatefulWidget {
 
 class _SealPageState extends ConsumerState<SealPage> {
   String? boxId;
+  String? selectedGroupId;
+  List<Group> userGroups = [];
   final Map<String, String> scannedQRCodes = {};
   final List<File> selectedPhotos = [];
   final TextEditingController memoController = TextEditingController();
   final TextEditingController storageLocationController = TextEditingController();
   bool isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    loadUserGroups();
+  }
+
+  Future<void> loadUserGroups() async {
+    try {
+      final userId = ref.read(currentUserIdProvider);
+      if (userId == null) return;
+
+      final getGroups = ref.read(getGroupsUseCaseProvider);
+      final groups = await getGroups.execute(userId);
+
+      if (mounted) {
+        setState(() {
+          userGroups = groups.where((g) => g.isJoinedMember(userId)).toList();
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -189,6 +214,7 @@ class _SealPageState extends ConsumerState<SealPage> {
           memo: memoController.text.trim(),
           faces: faces,
           photos: selectedPhotos,
+          groupId: selectedGroupId,
         ),
       );
       debugPrint('[Flutter SealPage] UseCase execution completed!');
@@ -280,6 +306,8 @@ class _SealPageState extends ConsumerState<SealPage> {
                           _buildMemoSection(),
                           const SizedBox(height: 16),
                           _buildStorageLocationSection(),
+                          const SizedBox(height: 16),
+                          _buildGroupSelectionSection(),
                           const SizedBox(height: 16),
                           _buildQRScanSection(),
                           const SizedBox(height: 80), // 下部ボタン分の余白
@@ -565,6 +593,62 @@ class _SealPageState extends ConsumerState<SealPage> {
                 hintText: '例: 押入れ2F、倉庫A-3',
                 border: OutlineInputBorder(),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGroupSelectionSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.group, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Text(
+                  '共有グループ',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'グループを選択すると、メンバー全員がこの箱を確認・開封できます',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              value: selectedGroupId,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('個人（自分だけ）'),
+                ),
+                ...userGroups.map(
+                  (group) => DropdownMenuItem<String?>(
+                    value: group.groupId,
+                    child: Text(group.name),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  selectedGroupId = value;
+                });
+              },
             ),
           ],
         ),

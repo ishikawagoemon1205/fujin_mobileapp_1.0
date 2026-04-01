@@ -1,22 +1,124 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // =========================================================
+    // boxes（封印箱）
+    // =========================================================
     match /boxes/{boxId} {
       // 認証済みユーザーなら存在確認（get）は誰でも可能
       // （封印時の boxId 重複チェックに必要）
       allow get: if request.auth != null;
 
       // 一覧取得はアプリ側の where クエリで userId を絞り込むため、認証済みであれば許可
-      // （Firestore の where クエリ評価時は resource が使えないため、resource チェックは不可）
       allow list: if request.auth != null;
 
-      // 更新・削除は自分の箱のみ
-      allow update, delete: if request.auth != null
-                             && request.auth.uid == resource.data.metadata.userId;
+      // 削除はオーナーのみ
+      allow delete: if request.auth != null
+                    && request.auth.uid == resource.data.metadata.userId;
+
+      // 更新: 個人箱はオーナーのみ、グループ共有箱はグループメンバーも可
+      // memberUids（Array）に自分の UID が含まれているかで確認
+      allow update: if request.auth != null
+                    && (
+                      request.auth.uid == resource.data.metadata.userId
+                      || (
+                        resource.data.metadata.groupId != null
+                        && request.auth.uid in get(/databases/$(database)/documents/groups/$(resource.data.metadata.groupId)).data.memberUids
+                      )
+                    );
 
       // 新規作成時は userId が自分の UID と一致することを確認
       allow create: if request.auth != null
                     && request.resource.data.metadata.userId == request.auth.uid;
+    }
+
+    // =========================================================
+    // friend_requests（友達申請）
+    // =========================================================
+    match /friend_requests/{requestId} {
+      // 送信者または受信者のみ参照可能
+      allow read: if request.auth != null
+                  && (request.auth.uid == resource.data.fromUid
+                      || request.auth.uid == resource.data.toUid);
+      // 作成は自分が送信者の場合のみ
+      allow create: if request.auth != null
+                    && request.resource.data.fromUid == request.auth.uid;
+      // 更新（承認・拒否）は受信者のみ
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.toUid;
+      // 削除は送信者または受信者
+      allow delete: if request.auth != null
+                    && (request.auth.uid == resource.data.fromUid
+                        || request.auth.uid == resource.data.toUid);
+    }
+
+    // =========================================================
+    // friendships（友達関係）
+    // =========================================================
+    match /friendships/{friendshipId} {
+      // userIds は Array 形式のため in 演算子で確認
+      allow read, delete: if request.auth != null
+                          && request.auth.uid in resource.data.userIds;
+      allow create: if request.auth != null
+                    && request.auth.uid in request.resource.data.userIds;
+    }
+
+    // =========================================================
+    // groups（グループ）
+    // =========================================================
+    match /groups/{groupId} {
+      // get（単体取得）: memberUids に自分の UID が含まれるメンバーのみ
+      allow get: if request.auth != null
+                 && request.auth.uid in resource.data.memberUids;
+
+      // list（コレクションクエリ）: アプリ側で where('memberUids', arrayContains: uid) を使うため
+      // Rules 側では認証済みであれば許可（resource は list 評価時に使用不可）
+      allow list: if request.auth != null;
+
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      // 更新: オーナーまたは memberUids に含まれるメンバー（招待承認・辞退などに必要）
+      allow update: if request.auth != null
+                    && (request.auth.uid == resource.data.ownerUid
+                        || request.auth.uid in resource.data.memberUids);
+      allow delete: if request.auth != null
+                    && request.auth.uid == resource.data.ownerUid;
+    }
+
+    // =========================================================
+    // notifications（通知）
+    // =========================================================
+    match /notifications/{notificationId} {
+      // 読み取りと既読更新は受信者のみ
+      allow read, update: if request.auth != null
+                          && request.auth.uid == resource.data.toUid;
+      // 作成は認証済みユーザーなら誰でも可（友達申請通知などの送信のため）
+      allow create: if request.auth != null;
+    }
+
+    // =========================================================
+    // invite_tokens（招待トークン）
+    // =========================================================
+    match /invite_tokens/{token} {
+      // トークンの読み取りは認証済みユーザーなら可（招待リンク受信者が検証するため）
+      allow read: if request.auth != null;
+      // 作成は認証済みユーザーが自分の fromUid で作成する場合のみ
+      allow create: if request.auth != null
+                    && request.resource.data.fromUid == request.auth.uid;
+      // 使用済みフラグの更新は認証済みユーザーなら可
+      allow update: if request.auth != null;
+    }
+
+    // =========================================================
+    // users（ユーザープロフィール）
+    // =========================================================
+    match /users/{userId} {
+      // 読み取りは認証済みユーザーなら可（友達検索・プロフィール表示のため）
+      allow read: if request.auth != null;
+      // 書き込みは自分のドキュメントのみ
+      allow write: if request.auth != null
+                   && request.auth.uid == userId;
     }
   }
 }

@@ -23,6 +23,7 @@ class CreateBoxParams {
   final String memo;
   final Map<String, QRFace> faces;
   final List<File> photos;
+  final String? groupId;
 
   const CreateBoxParams({
     required this.boxId,
@@ -31,6 +32,7 @@ class CreateBoxParams {
     required this.memo,
     required this.faces,
     required this.photos,
+    this.groupId,
   });
 }
 
@@ -74,6 +76,7 @@ class CreateBoxUseCase {
       faces: params.faces,
       photos: uploadedPhotos,
       memo: params.memo,
+      groupId: params.groupId,
       history: [
         BoxHistory(
           timestamp: now,
@@ -84,6 +87,17 @@ class CreateBoxUseCase {
     );
 
     await _repository.createBox(box);
+
+    // グループ封印の場合、自分以外のメンバーに通知を送る
+    if (params.groupId != null) {
+      await _repository.notifyGroupMembers(
+        groupId: params.groupId!,
+        senderUid: params.userId,
+        boxId: params.boxId,
+        storageLocation: params.storageLocation,
+      );
+    }
+
     return box;
   }
 }

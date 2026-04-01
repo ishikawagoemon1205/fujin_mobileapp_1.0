@@ -96,7 +96,12 @@ class _QRScanPageState extends State<QRScanPage> {
     final qrCode = barcode.rawValue!;
     debugPrint('[Flutter QRScan] Detected QR: $qrCode');
 
-    if (!QRCodeUtils.validateQRCode(qrCode)) {
+    // ユーザーQR (fujin-user://) は validateQRCode の対象外のため個別に判定する
+    final isValidBoxQR = QRCodeUtils.validateQRCode(qrCode);
+    final isValidUserQR = QRCodeUtils.isUserQR(qrCode) &&
+        QRCodeUtils.extractUidFromUserQR(qrCode) != null;
+
+    if (!isValidBoxQR && !isValidUserQR) {
       debugPrint('[Flutter QRScan] Invalid QR code format');
       showInvalidQRError();
       return;

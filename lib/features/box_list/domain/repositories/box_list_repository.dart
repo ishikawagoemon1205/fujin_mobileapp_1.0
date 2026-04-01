@@ -12,7 +12,7 @@ import '../../../../shared/models/box_model.dart';
 
 /// 箱一覧機能の Repository インターフェース
 abstract class BoxListRepository {
-  /// 指定ユーザーの全箱を取得する
+  /// 指定ユーザーの全箱を取得する（個人の箱 + グループの箱）
   ///
   /// [userId] 取得対象のユーザーID
   ///

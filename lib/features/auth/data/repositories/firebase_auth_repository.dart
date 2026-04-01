@@ -4,10 +4,12 @@
   - Firebase Auth を使った認証 Repository の具体的実装
   - AuthRepository インターフェースの実装
   - Firebase 固有の例外を domain 層の AuthException に変換
+  - 認証成功時に Firestore users コレクションへプロフィール自動保存
 
 処理構造:
   - Firebase Auth 操作
   - Google Sign-In 操作
+  - Firestore ユーザープロフィール保存
   - ユーザーモデル変換
   - 例外変換
 ====================================================
@@ -57,7 +59,9 @@ class FirebaseAuthRepository implements AuthRepository {
         email: email,
         password: password,
       );
-      return _toAppUser(credential.user!);
+      final appUser = _toAppUser(credential.user!);
+      await _saveUserProfile(credential.user!);
+      return appUser;
     } on FirebaseAuthException catch (e) {
       throw AuthException(code: e.code, description: e.message ?? '');
     }
@@ -79,7 +83,9 @@ class FirebaseAuthRepository implements AuthRepository {
 
       final userCredential =
           await _firebaseAuth.signInWithCredential(credential);
-      return _toAppUser(userCredential.user!);
+      final appUser = _toAppUser(userCredential.user!);
+      await _saveUserProfile(userCredential.user!);
+      return appUser;
     } on GoogleSignInCancelledException {
       rethrow;
     } on FirebaseAuthException catch (e) {
@@ -97,7 +103,9 @@ class FirebaseAuthRepository implements AuthRepository {
         email: email,
         password: password,
       );
-      return _toAppUser(credential.user!);
+      final appUser = _toAppUser(credential.user!);
+      await _saveUserProfile(credential.user!);
+      return appUser;
     } on FirebaseAuthException catch (e) {
       throw AuthException(code: e.code, description: e.message ?? '');
     }
@@ -128,5 +136,47 @@ class FirebaseAuthRepository implements AuthRepository {
       photoUrl: user.photoURL,
       createdAt: user.metadata.creationTime ?? DateTime.now(),
     );
+  }
+
+  /// 認証成功時に Firestore users/{uid} へプロフィールを保存する
+  ///
+  /// 既存ドキュメントがある場合は merge で更新し、ユーザーが手動で設定した値を上書きしない。
+  /// Google 認証時は displayName と photoUrl が Firebase Auth から取得できるため保存される。
+  Future<void> _saveUserProfile(User user) async {
+    final docRef =
+        FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final doc = await docRef.get();
+
+    if (!doc.exists) {
+      await docRef.set({
+        'email': user.email ?? '',
+        'displayName': user.displayName,
+        'photoUrl': user.photoURL,
+        'createdAt': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
+    } else {
+      final updateData = <String, Object?>{
+        'email': user.email ?? '',
+        'updatedAt': Timestamp.now(),
+      };
+
+      final existingData = doc.data()!;
+      final existingDisplayName = existingData['displayName'] as String?;
+      if ((existingDisplayName == null || existingDisplayName.isEmpty) &&
+          user.displayName != null &&
+          user.displayName!.isNotEmpty) {
+        updateData['displayName'] = user.displayName;
+      }
+
+      final existingPhotoUrl = existingData['photoUrl'] as String?;
+      if ((existingPhotoUrl == null || existingPhotoUrl.isEmpty) &&
+          user.photoURL != null &&
+          user.photoURL!.isNotEmpty) {
+        updateData['photoUrl'] = user.photoURL;
+      }
+
+      await docRef.update(updateData);
+    }
   }
 }

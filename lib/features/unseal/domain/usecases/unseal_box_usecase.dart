@@ -7,6 +7,7 @@
   - 箱データの取得
   - QR検証結果に基づくステータス更新
   - 履歴の追加
+  - グループ封印の場合はメンバーへの通知
 ====================================================
 */
 
@@ -66,6 +67,16 @@ class UnsealBoxUseCase {
         details: details,
       ),
     );
+
+    if (box.groupId != null && box.groupId!.isNotEmpty) {
+      await _repository.notifyGroupMembersOnUnseal(
+        groupId: box.groupId!,
+        senderUid: params.userId,
+        boxId: params.boxId,
+        storageLocation: box.storageLocation,
+        status: newStatus,
+      );
+    }
 
     return newStatus;
   }

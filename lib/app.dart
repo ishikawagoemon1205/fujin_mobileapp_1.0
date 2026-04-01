@@ -22,6 +22,8 @@ import 'core/router.dart';
 import 'features/auth/presentation/auth_gate.dart';
 import 'features/auth/presentation/signup_page.dart';
 import 'features/auth/presentation/password_reset_page.dart';
+import 'shared/services/deep_link_service.dart';
+import 'shared/services/fcm_token_service.dart';
 
 /// 封神アプリケーションのルートウィジェット
 ///
@@ -86,6 +88,8 @@ class FujinApp extends ConsumerWidget {
           );
         }
         // 認証済み: Beamer による機能画面ルーティング
+        DeepLinkService().initialize();
+        FcmTokenService().saveToken(user.uid);
         return MaterialApp.router(
           title: '封神',
           theme: AppTheme.lightTheme,

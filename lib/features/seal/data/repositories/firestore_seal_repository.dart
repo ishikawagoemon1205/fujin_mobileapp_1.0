@@ -3,10 +3,12 @@
 目的:
   - 封印機能の Firestore Repository 実装
   - 箱の作成と写真アップロードの具体的なFirebase操作
+  - グループ封印時のメンバーへの通知送信
 
 処理構造:
   - Firestore ドキュメント作成
   - Firebase Storage への画像アップロード
+  - グループメンバー取得 → 通知ドキュメント作成
   - データモデルとFirestoreドキュメントの変換
 ====================================================
 */
@@ -41,6 +43,56 @@ class FirestoreSealRepository implements SealRepository {
   Future<bool> boxExists(String boxId) async {
     final doc = await _firestore.collection('boxes').doc(boxId).get();
     return doc.exists;
+  }
+
+  @override
+  Future<void> notifyGroupMembers({
+    required String groupId,
+    required String senderUid,
+    required String boxId,
+    required String storageLocation,
+  }) async {
+    // グループドキュメントから memberUids を取得する
+    final groupDoc =
+        await _firestore.collection('groups').doc(groupId).get();
+    if (!groupDoc.exists) return;
+
+    final data = groupDoc.data()!;
+    final memberUids = List<String>.from(data['memberUids'] as List? ?? []);
+
+    // 送信者自身には通知しない
+    final targets =
+        memberUids.where((uid) => uid != senderUid).toList();
+    if (targets.isEmpty) return;
+
+    // 送信者の表示名を取得する（通知本文に使用）
+    final senderDoc =
+        await _firestore.collection('users').doc(senderUid).get();
+    final senderName = (senderDoc.data()?['displayName'] as String?)
+        ?? (senderDoc.data()?['email'] as String?)
+        ?? '不明なユーザー';
+
+    final groupName = data['name'] as String? ?? 'グループ';
+
+    // 自分以外の全メンバーに通知を送る
+    final batch = _firestore.batch();
+    for (final uid in targets) {
+      final notifRef = _firestore.collection('notifications').doc();
+      batch.set(notifRef, {
+        'toUid': uid,
+        'type': 'box_sealed',
+        'title': '📦 グループで封印されました',
+        'body': '$senderName が「$groupName」で封印しました（保管場所: $storageLocation）',
+        'payload': {
+          'boxId': boxId,
+          'groupId': groupId,
+          'groupName': groupName,
+        },
+        'isRead': false,
+        'createdAt': Timestamp.now(),
+      });
+    }
+    await batch.commit();
   }
 
   @override
@@ -89,6 +141,7 @@ class FirestoreSealRepository implements SealRepository {
     return {
       'metadata': {
         'userId': box.userId,
+        'groupId': box.groupId,
         'createdAt': Timestamp.fromDate(box.createdAt),
         'updatedAt': Timestamp.fromDate(box.updatedAt),
         'status': box.status.value,

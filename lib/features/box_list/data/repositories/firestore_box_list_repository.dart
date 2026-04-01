@@ -23,15 +23,44 @@ class FirestoreBoxListRepository implements BoxListRepository {
 
   @override
   Future<List<Box>> getAllBoxes(String userId) async {
-    final snapshot = await _firestore
+    final myBoxesSnapshot = await _firestore
         .collection('boxes')
         .where('metadata.userId', isEqualTo: userId)
         .get(const GetOptions(source: Source.server));
 
-    return snapshot.docs
+    final myBoxes = myBoxesSnapshot.docs
         .map((doc) => _fromFirestore(doc.id, doc.data()))
         .where((box) => box.userId.isNotEmpty && box.userId == userId)
         .toList();
+
+    final groupsSnapshot = await _firestore.collection('groups').get();
+    final myGroupIds = <String>[];
+    for (final groupDoc in groupsSnapshot.docs) {
+      final members = groupDoc.data()['members'] as Map<String, Object?>?;
+      if (members != null && members.containsKey(userId)) {
+        final memberData = members[userId] as Map<String, Object?>?;
+        if (memberData?['status'] == 'joined') {
+          myGroupIds.add(groupDoc.id);
+        }
+      }
+    }
+
+    final groupBoxes = <Box>[];
+    for (final groupId in myGroupIds) {
+      final groupBoxSnapshot = await _firestore
+          .collection('boxes')
+          .where('metadata.groupId', isEqualTo: groupId)
+          .get(const GetOptions(source: Source.server));
+
+      for (final doc in groupBoxSnapshot.docs) {
+        final box = _fromFirestore(doc.id, doc.data());
+        if (!myBoxes.any((b) => b.boxId == box.boxId)) {
+          groupBoxes.add(box);
+        }
+      }
+    }
+
+    return [...myBoxes, ...groupBoxes];
   }
 
   Box _fromFirestore(String boxId, Map<String, Object?> doc) {
@@ -43,6 +72,7 @@ class FirestoreBoxListRepository implements BoxListRepository {
     return Box(
       boxId: boxId,
       userId: metadata['userId'] as String? ?? '',
+      groupId: metadata['groupId'] as String?,
       createdAt: (metadata['createdAt'] as Timestamp).toDate(),
       updatedAt: (metadata['updatedAt'] as Timestamp).toDate(),
       status: BoxStatus.fromString(metadata['status'] as String),

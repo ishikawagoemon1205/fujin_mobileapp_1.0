@@ -28,8 +28,23 @@ class FirestoreUnsealRepository implements UnsealRepository {
     final doc = await _firestore.collection('boxes').doc(boxId).get();
     if (!doc.exists) return null;
     final box = _fromFirestore(boxId, doc.data()!);
-    if (box.userId != userId) return null;
-    return box;
+
+    if (box.userId == userId) return box;
+
+    if (box.groupId != null && box.groupId!.isNotEmpty) {
+      final groupDoc = await _firestore.collection('groups').doc(box.groupId).get();
+      if (groupDoc.exists) {
+        final members = groupDoc.data()?['members'] as Map<String, Object?>?;
+        if (members != null && members.containsKey(userId)) {
+          final memberData = members[userId] as Map<String, Object?>?;
+          if (memberData?['status'] == 'joined') {
+            return box;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -59,6 +74,62 @@ class FirestoreUnsealRepository implements UnsealRepository {
     });
   }
 
+  @override
+  Future<void> notifyGroupMembersOnUnseal({
+    required String groupId,
+    required String senderUid,
+    required String boxId,
+    required String storageLocation,
+    required BoxStatus status,
+  }) async {
+    final groupDoc =
+        await _firestore.collection('groups').doc(groupId).get();
+    if (!groupDoc.exists) return;
+
+    final data = groupDoc.data()!;
+    final memberUids = List<String>.from(data['memberUids'] as List? ?? []);
+
+    final targets =
+        memberUids.where((uid) => uid != senderUid).toList();
+    if (targets.isEmpty) return;
+
+    final senderDoc =
+        await _firestore.collection('users').doc(senderUid).get();
+    final senderName = (senderDoc.data()?['displayName'] as String?)
+        ?? (senderDoc.data()?['email'] as String?)
+        ?? '不明なユーザー';
+
+    final groupName = data['name'] as String? ?? 'グループ';
+
+    final bool isTampered = status == BoxStatus.tampered;
+    final notificationType = isTampered ? 'box_tampered' : 'box_opened';
+    final title = isTampered
+        ? '⚠️ 破損が検知されました'
+        : '📦 グループの封印が開封されました';
+    final body = isTampered
+        ? '「$groupName」の封印物で破損が検知されました（保管場所: $storageLocation）'
+        : '$senderName が「$groupName」の封印物を開封しました（保管場所: $storageLocation）';
+
+    final batch = _firestore.batch();
+    for (final uid in targets) {
+      final notifRef = _firestore.collection('notifications').doc();
+      batch.set(notifRef, {
+        'toUid': uid,
+        'type': notificationType,
+        'title': title,
+        'body': body,
+        'payload': {
+          'boxId': boxId,
+          'groupId': groupId,
+          'groupName': groupName,
+        },
+        'isRead': false,
+        'createdAt': Timestamp.now(),
+      });
+    }
+    await batch.commit();
+  }
+
   Box _fromFirestore(String boxId, Map<String, Object?> doc) {
     final metadata = doc['metadata'] as Map<String, Object?>;
     final facesData = doc['faces'] as Map<String, Object?>? ?? {};
@@ -68,6 +139,7 @@ class FirestoreUnsealRepository implements UnsealRepository {
     return Box(
       boxId: boxId,
       userId: metadata['userId'] as String? ?? '',
+      groupId: metadata['groupId'] as String?,
       createdAt: (metadata['createdAt'] as Timestamp).toDate(),
       updatedAt: (metadata['updatedAt'] as Timestamp).toDate(),
       status: BoxStatus.fromString(metadata['status'] as String),

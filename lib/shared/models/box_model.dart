@@ -75,6 +75,7 @@ class BoxHistory {
 class Box {
   final String boxId;
   final String userId;
+  final String? groupId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final BoxStatus status;
@@ -90,6 +91,7 @@ class Box {
   const Box({
     required this.boxId,
     required this.userId,
+    this.groupId,
     required this.createdAt,
     required this.updatedAt,
     required this.status,
@@ -106,6 +108,7 @@ class Box {
   /// コピーを作成する
   Box copyWith({
     String? userId,
+    String? groupId,
     DateTime? updatedAt,
     BoxStatus? status,
     String? storageLocation,
@@ -119,6 +122,7 @@ class Box {
     return Box(
       boxId: boxId,
       userId: userId ?? this.userId,
+      groupId: groupId ?? this.groupId,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       status: status ?? this.status,
