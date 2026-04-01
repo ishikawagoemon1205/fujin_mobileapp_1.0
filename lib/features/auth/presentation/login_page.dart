@@ -87,9 +87,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     setState(() => _isGoogleLoading = true);
 
     try {
+      debugPrint('[LoginPage] Google Sign-In 開始');
       final useCase = ref.read(signInWithGoogleUseCaseProvider);
       await useCase.execute();
+      debugPrint('[LoginPage] Google Sign-In 成功');
     } catch (e) {
+      debugPrint('[LoginPage] Google Sign-In エラー: $e');
       if (mounted && e is! GoogleSignInCancelledException) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -121,6 +124,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           return 'ネットワークエラーが発生しました';
         case 'account-exists-with-different-credential':
           return 'このメールアドレスは別のログイン方法で登録されています';
+        case 'google-sign-in-timeout':
+          return 'Google サインインがタイムアウトしました。設定を確認してください';
+        case 'google-sign-in-error':
+          return 'Google サインインに失敗しました。再度お試しください';
         default:
           return 'ログインに失敗しました（${error.code}）';
       }

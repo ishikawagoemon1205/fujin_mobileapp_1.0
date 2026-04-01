@@ -73,52 +73,25 @@ class _SealPageState extends ConsumerState<SealPage> {
     super.dispose();
   }
 
-  Future<void> handleQRCodeScanned(String qrCode) async {
-    debugPrint('[Flutter SealPage] handleQRCodeScanned called with: $qrCode');
-    debugPrint('[Flutter SealPage] Current state - boxId: $boxId, scannedQRCodes: ${scannedQRCodes.length}');
-    
-    final parsed = QRCodeUtils.parseQRCode(qrCode);
-    if (parsed == null) {
-      debugPrint('[Flutter SealPage] Failed to parse QR code');
-      return;
-    }
+  Future<void> handleQRScanResult(SealQRScanResult result) async {
+    if (result.scannedCodes.isEmpty) return;
 
-    final scannedBoxId = parsed['boxId']!;
-    final faceId = parsed['faceId']!;
-    debugPrint('[Flutter SealPage] Parsed - boxId: $scannedBoxId, faceId: $faceId');
-
-    if (boxId == null) {
-      debugPrint('[Flutter SealPage] First QR, setting boxId to $scannedBoxId');
-      boxId = scannedBoxId;
-    } else if (boxId != scannedBoxId) {
-      debugPrint('[Flutter SealPage] Different box ID detected (expected: $boxId, got: $scannedBoxId)');
-      showErrorDialog('異なる箱のQRコードです');
-      return;
-    }
-
-    if (scannedQRCodes.containsKey(faceId)) {
-      debugPrint('[Flutter SealPage] Duplicate face ID: $faceId, ignoring silently');
-      return;
-    }
-
-    // QRコードを追加
-    debugPrint('[Flutter SealPage] Adding QR to scannedQRCodes');
     setState(() {
-      scannedQRCodes[faceId] = qrCode;
+      if (result.boxId != null && boxId == null) {
+        boxId = result.boxId;
+      }
+      scannedQRCodes.addAll(result.scannedCodes);
     });
-    debugPrint('[Flutter SealPage] setState completed, scannedQRCodes.length=${scannedQRCodes.length}');
 
     if (mounted) {
-      debugPrint('[Flutter SealPage] Showing success snackbar');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${scannedQRCodes.length}枚目のQRを読み取りました'),
+          content: Text('${result.scannedCodes.length}枚のQRを読み取りました（合計${scannedQRCodes.length}枚）'),
           backgroundColor: Colors.green,
-          duration: const Duration(seconds: 1),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
-    debugPrint('[Flutter SealPage] handleQRCodeScanned completed');
   }
 
   Future<void> pickImages() async {
@@ -440,15 +413,18 @@ class _SealPageState extends ConsumerState<SealPage> {
   }
 
   Future<void> openQRScanPage() async {
-    await Navigator.of(context).push(
+    final result = await Navigator.of(context).push<SealQRScanResult>(
       MaterialPageRoute(
         builder: (context) => SealQRScanPage(
           currentBoxId: boxId,
           scannedFaceIds: scannedQRCodes.keys.toSet(),
-          onQRScanned: handleQRCodeScanned,
         ),
       ),
     );
+
+    if (result != null) {
+      await handleQRScanResult(result);
+    }
   }
 
   Widget _buildPhotosSection() {

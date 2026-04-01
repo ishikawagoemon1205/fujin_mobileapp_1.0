@@ -70,7 +70,15 @@ class FirebaseAuthRepository implements AuthRepository {
   @override
   Future<AppUser> signInWithGoogle() async {
     try {
-      final googleUser = await _googleSignIn.signIn();
+      final googleUser = await _googleSignIn.signIn().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw AuthException(
+          code: 'google-sign-in-timeout',
+          description: 'Google サインインがタイムアウトしました。'
+              'iOS の場合、GoogleService-Info.plist に CLIENT_ID が'
+              '設定されていない可能性があります。',
+        ),
+      );
       if (googleUser == null) {
         throw const GoogleSignInCancelledException();
       }
@@ -88,8 +96,15 @@ class FirebaseAuthRepository implements AuthRepository {
       return appUser;
     } on GoogleSignInCancelledException {
       rethrow;
+    } on AuthException {
+      rethrow;
     } on FirebaseAuthException catch (e) {
       throw AuthException(code: e.code, description: e.message ?? '');
+    } catch (e) {
+      throw AuthException(
+        code: 'google-sign-in-error',
+        description: 'Google サインインに失敗しました: $e',
+      );
     }
   }
 

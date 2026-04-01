@@ -1,13 +1,14 @@
 /*
 ====================================================
 目的:
-  - 封印用のQRコードをスキャンする専用画面
+  - 封印用のQRコードを連続スキャンする専用画面
   - フルスクリーンでの没入型スキャン体験
 
 処理構造:
   - カメラの初期化と制御
-  - QRコードの連続スキャン
-  - 自動で元画面に戻る
+  - QRコードの連続スキャン（複数枚を1回のセッションで読み取り）
+  - スキャン済みFace IDのリアルタイム表示
+  - 完了ボタンでまとめて返却
   - エラーハンドリング
 ====================================================
 */
@@ -16,17 +17,35 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/utils/qr_utils.dart';
 
-/// 封印用QRスキャン画面
+/// 封印用QRスキャンの結果を保持するデータクラス
+class SealQRScanResult {
+  /// このセッションで新たにスキャンされたQRコード（faceId → qrCode）
+  final Map<String, String> scannedCodes;
+
+  /// 1枚目のQRから取得した箱ID
+  final String? boxId;
+
+  const SealQRScanResult({
+    required this.scannedCodes,
+    this.boxId,
+  });
+}
+
+/// 封印用QRスキャン画面（連続スキャン対応）
+///
+/// 1回のカメラセッションで複数のQRコードを読み取り、
+/// ユーザーが「完了」ボタンを押した時点でまとめて結果を返す。
 class SealQRScanPage extends StatefulWidget {
+  /// 既にスキャン済みの箱ID（2回目以降のスキャンセッションで使用）
   final String? currentBoxId;
+
+  /// 既にスキャン済みのFace IDセット（重複排除用）
   final Set<String> scannedFaceIds;
-  final Function(String qrCode) onQRScanned;
 
   const SealQRScanPage({
     super.key,
     this.currentBoxId,
     required this.scannedFaceIds,
-    required this.onQRScanned,
   });
 
   @override
@@ -35,24 +54,31 @@ class SealQRScanPage extends StatefulWidget {
 
 class _SealQRScanPageState extends State<SealQRScanPage> {
   MobileScannerController? scannerController;
-  bool isProcessing = false;
-  String? errorMessage;
-  int scanCount = 0;
+  bool _isHandling = false;
+  String? statusMessage;
+  bool isStatusSuccess = false;
+
+  String? _resolvedBoxId;
+  final Map<String, String> _sessionScannedCodes = {};
+  late Set<String> _allScannedFaceIds;
+
+  int get totalScanCount => widget.scannedFaceIds.length + _sessionScannedCodes.length;
 
   @override
   void initState() {
     super.initState();
-    scanCount = widget.scannedFaceIds.length;
-    initializeScanner();
+    _resolvedBoxId = widget.currentBoxId;
+    _allScannedFaceIds = Set<String>.from(widget.scannedFaceIds);
+    _initializeScanner();
   }
 
-  Future<void> initializeScanner() async {
+  Future<void> _initializeScanner() async {
     try {
       scannerController = MobileScannerController(
         detectionSpeed: DetectionSpeed.normal,
         facing: CameraFacing.back,
       );
-      
+
       if (mounted) {
         setState(() {});
       }
@@ -60,7 +86,8 @@ class _SealQRScanPageState extends State<SealQRScanPage> {
       debugPrint('[SealQRScanPage] Failed to initialize scanner: $e');
       if (mounted) {
         setState(() {
-          errorMessage = 'カメラの初期化に失敗しました';
+          statusMessage = 'カメラの初期化に失敗しました';
+          isStatusSuccess = false;
         });
       }
     }
@@ -72,105 +99,92 @@ class _SealQRScanPageState extends State<SealQRScanPage> {
     super.dispose();
   }
 
-  Future<void> handleDetection(BarcodeCapture capture) async {
-    if (isProcessing) {
-      return;
-    }
+  Future<void> _handleDetection(BarcodeCapture capture) async {
+    if (_isHandling) return;
 
     final barcode = capture.barcodes.firstOrNull;
-    if (barcode?.rawValue == null) {
-      return;
-    }
+    if (barcode?.rawValue == null) return;
 
     final qrCode = barcode!.rawValue!;
     debugPrint('[SealQRScanPage] Detected QR: $qrCode');
 
+    _isHandling = true;
     setState(() {
-      isProcessing = true;
-      errorMessage = null;
+      statusMessage = null;
     });
 
     try {
-      // QRコードの形式チェック
       if (!QRCodeUtils.validateQRCode(qrCode)) {
-        showError('無効なQRコードです');
+        _showStatus('無効なQRコードです', isSuccess: false);
         return;
       }
 
       final parsed = QRCodeUtils.parseQRCode(qrCode);
       if (parsed == null) {
-        showError('QRコードの解析に失敗しました');
+        _showStatus('QRコードの解析に失敗しました', isSuccess: false);
         return;
       }
 
       final scannedBoxId = parsed['boxId']!;
       final faceId = parsed['faceId']!;
 
-      // box-idのチェック
-      if (widget.currentBoxId != null && widget.currentBoxId != scannedBoxId) {
-        showError('異なる箱のQRコードです');
+      if (_resolvedBoxId != null && _resolvedBoxId != scannedBoxId) {
+        _showStatus('異なる箱のQRコードです', isSuccess: false);
         return;
       }
 
-      // 重複チェック
-      if (widget.scannedFaceIds.contains(faceId)) {
+      if (_allScannedFaceIds.contains(faceId)) {
         debugPrint('[SealQRScanPage] Duplicate face ID: $faceId');
-        showError('このQRコード($faceId)は既にスキャン済みです');
+        _showStatus('$faceId は既にスキャン済みです', isSuccess: false);
         return;
       }
 
-      // 成功
-      debugPrint('[SealQRScanPage] Valid QR, calling callback');
+      debugPrint('[SealQRScanPage] Valid QR: $faceId');
       setState(() {
-        scanCount++;
+        _resolvedBoxId ??= scannedBoxId;
+        _sessionScannedCodes[faceId] = qrCode;
+        _allScannedFaceIds.add(faceId);
       });
 
-      widget.onQRScanned(qrCode);
-
-      // 成功のフィードバック表示
-      if (mounted) {
-        await showSuccessFeedback();
-      }
-
-      // 1秒後に自動的に戻る
-      if (mounted) {
-        await Future.delayed(const Duration(milliseconds: 1000));
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      }
+      _showStatus('✓ $faceId を読み取りました', isSuccess: true);
     } finally {
-      if (mounted) {
-        setState(() {
-          isProcessing = false;
-        });
-      }
+      // isProcessing は即座に解除する（オーバーレイでタッチをブロックしない）
+      _isHandling = false;
     }
+
+    // 次の検出を受け付けるまでの短いクールダウン（isProcessing とは分離）
+    await Future.delayed(const Duration(milliseconds: 800));
   }
 
-  void showError(String message) {
+  void _showStatus(String message, {required bool isSuccess}) {
     setState(() {
-      errorMessage = message;
+      statusMessage = message;
+      isStatusSuccess = isSuccess;
     });
 
-    // 2秒後にエラーメッセージをクリア
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
-          errorMessage = null;
+          statusMessage = null;
         });
       }
     });
   }
 
-  Future<void> showSuccessFeedback() async {
-    // バイブレーション（将来的に追加可能）
-    // HapticFeedback.mediumImpact();
-    
-    // 成功メッセージは画面上に表示
-    setState(() {
-      errorMessage = '✓ 読み取り成功！';
-    });
+  void _onComplete() {
+    final result = SealQRScanResult(
+      scannedCodes: Map<String, String>.from(_sessionScannedCodes),
+      boxId: _resolvedBoxId,
+    );
+    Navigator.of(context).pop(result);
+  }
+
+  void _onClose() {
+    final result = SealQRScanResult(
+      scannedCodes: Map<String, String>.from(_sessionScannedCodes),
+      boxId: _resolvedBoxId,
+    );
+    Navigator.of(context).pop(result);
   }
 
   @override
@@ -179,13 +193,12 @@ class _SealQRScanPageState extends State<SealQRScanPage> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // カメラビュー
-          if (scannerController != null && errorMessage != 'カメラの初期化に失敗しました')
+          if (scannerController != null && statusMessage != 'カメラの初期化に失敗しました')
             MobileScanner(
               controller: scannerController,
-              onDetect: handleDetection,
+              onDetect: _handleDetection,
             )
-          else if (errorMessage == 'カメラの初期化に失敗しました')
+          else if (statusMessage == 'カメラの初期化に失敗しました')
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -193,12 +206,12 @@ class _SealQRScanPageState extends State<SealQRScanPage> {
                   const Icon(Icons.camera_alt_outlined, size: 64, color: Colors.white),
                   const SizedBox(height: 16),
                   Text(
-                    errorMessage!,
+                    statusMessage!,
                     style: const TextStyle(color: Colors.white, fontSize: 18),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () => Navigator.of(context).pop(null),
                     child: const Text('戻る'),
                   ),
                 ],
@@ -209,212 +222,273 @@ class _SealQRScanPageState extends State<SealQRScanPage> {
               child: CircularProgressIndicator(color: Colors.white),
             ),
 
-          // スキャンガイド枠
-          Center(
-            child: Container(
-              width: 280,
-              height: 280,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 3),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Stack(
-                children: [
-                  // コーナーマーカー
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.green.shade400, width: 4),
-                          left: BorderSide(color: Colors.green.shade400, width: 4),
-                        ),
-                      ),
-                    ),
+          _buildScanGuide(),
+          _buildTopBar(),
+          _buildBottomPanel(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScanGuide() {
+    return Center(
+      child: Container(
+        width: 280,
+        height: 280,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white, width: 3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.green.shade400, width: 4),
+                    left: BorderSide(color: Colors.green.shade400, width: 4),
                   ),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.green.shade400, width: 4),
-                          right: BorderSide(color: Colors.green.shade400, width: 4),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: Colors.green.shade400, width: 4),
-                          left: BorderSide(color: Colors.green.shade400, width: 4),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: Colors.green.shade400, width: 4),
-                          right: BorderSide(color: Colors.green.shade400, width: 4),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Colors.green.shade400, width: 4),
+                    right: BorderSide(color: Colors.green.shade400, width: 4),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.green.shade400, width: 4),
+                    left: BorderSide(color: Colors.green.shade400, width: 4),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.green.shade400, width: 4),
+                    right: BorderSide(color: Colors.green.shade400, width: 4),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          // 上部: タイトルと閉じるボタン
-          SafeArea(
-            child: Column(
+  Widget _buildTopBar() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              onPressed: _onClose,
+              icon: const Icon(Icons.close, color: Colors.white, size: 32),
+            ),
+            const Text(
+              'QRコードをスキャン',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 48),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomPanel() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [
+                Colors.black.withOpacity(0.9),
+                Colors.black.withOpacity(0.7),
+                Colors.transparent,
+              ],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (statusMessage != null) _buildStatusBanner(),
+              if (_sessionScannedCodes.isNotEmpty) _buildScannedFaceList(),
+              const SizedBox(height: 12),
+              _buildScanCountBadge(),
+              const SizedBox(height: 16),
+              _buildCompleteButton(),
+              const SizedBox(height: 8),
+              Text(
+                _sessionScannedCodes.isEmpty
+                    ? 'QRコードを枠内に合わせてください'
+                    : '続けて次のQRコードを読み取れます',
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isStatusSuccess ? Colors.green.shade700 : Colors.red.shade700,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isStatusSuccess ? Icons.check_circle : Icons.error,
+            color: Colors.white,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              statusMessage!,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScannedFaceList() {
+    final faceIds = _sessionScannedCodes.keys.toList();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: faceIds.map((faceId) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green.shade700.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.green.shade400, width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close, color: Colors.white, size: 32),
-                      ),
-                      const Text(
-                        'QRコードをスキャン',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(width: 48), // バランス調整
-                    ],
+                const Icon(Icons.check, color: Colors.white, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  faceId,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
-          ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 
-          // 下部: スキャン状態表示
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.8),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // エラーメッセージまたは成功メッセージ
-                    if (errorMessage != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: errorMessage!.startsWith('✓')
-                              ? Colors.green.shade700
-                              : Colors.red.shade700,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              errorMessage!.startsWith('✓')
-                                  ? Icons.check_circle
-                                  : Icons.error,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                errorMessage!,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // スキャン済み枚数
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.qr_code_2, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            '$scanCount枚スキャン済み',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'QRコードを枠内に合わせてください',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  Widget _buildScanCountBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.qr_code_2, color: Colors.white, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            '$totalScanCount枚スキャン済み',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
-
-          // 処理中オーバーレイ
-          if (isProcessing)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompleteButton() {
+    final hasNewScans = _sessionScannedCodes.isNotEmpty;
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: hasNewScans ? _onComplete : null,
+        icon: const Icon(Icons.done),
+        label: Text(
+          hasNewScans
+              ? 'スキャン完了（${_sessionScannedCodes.length}枚）'
+              : 'QRコードを読み取ってください',
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: hasNewScans ? Colors.green.shade600 : Colors.grey.shade700,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: Colors.grey.shade800,
+          disabledForegroundColor: Colors.grey.shade500,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

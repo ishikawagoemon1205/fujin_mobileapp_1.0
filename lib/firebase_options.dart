@@ -64,6 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '569091665840',
     projectId: 'fujin-634db',
     storageBucket: 'fujin-634db.firebasestorage.app',
+    iosClientId: '569091665840-975nv1vg80449nchvbmkg62cee80lers.apps.googleusercontent.com',
     iosBundleId: 'com.example.wcmFujinMobileApp',
   );
 
@@ -73,6 +74,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '569091665840',
     projectId: 'fujin-634db',
     storageBucket: 'fujin-634db.firebasestorage.app',
+    iosClientId: '569091665840-975nv1vg80449nchvbmkg62cee80lers.apps.googleusercontent.com',
     iosBundleId: 'com.example.wcmFujinMobileApp',
   );
 
