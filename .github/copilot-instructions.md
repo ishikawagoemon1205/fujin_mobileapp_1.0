@@ -24,6 +24,9 @@ QRコードシールを梱包物の開閉口に貼って封印し、スマート
 | Phase 1.0 の技術スタック・ディレクトリ構成・データモデル | [`docs/phase1.0/詳細設計書.md`](../docs/phase1.0/詳細設計書.md) |
 | Phase 1.1 の目的・Clean Architecture 完了定義・認証要件 | [`docs/phase1.1/要件定義書.md`](../docs/phase1.1/要件定義書.md) |
 | Phase 1.1 の設計原則根拠・移行後ディレクトリ構成・認証フロー | [`docs/phase1.1/詳細設計書.md`](../docs/phase1.1/詳細設計書.md) |
+| Phase 1.3 の目的・保管フロー・ステータス体系変更 | [`docs/phase1.3/要件定義書.md`](../docs/phase1.3/要件定義書.md) |
+| Phase 1.3 の詳細設計・データモデル・影響ファイル一覧 | [`docs/phase1.3/詳細設計書.md`](../docs/phase1.3/詳細設計書.md) |
+| ブランチ戦略・開発フロー・コミット規則 | [`docs/git/ブランチ戦略.md`](../docs/git/ブランチ戦略.md) |
 | クライアント保有特許の技術概要 | [`docs/patent/PATENT_SUMMARY.md`](../docs/patent/PATENT_SUMMARY.md) |
 
 ---
